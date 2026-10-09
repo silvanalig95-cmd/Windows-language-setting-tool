@@ -2591,7 +2591,7 @@ finally {
         $mode = $null
         if ($started -match 'mode=(\w+)') { $mode = $Matches[1] }
         if (-not $started) {
-            $reason = "PowerShell did not start in $Label's session, or was stopped immediately (security software or a policy that blocks PowerShell for this user?)."
+            $reason = "PowerShell did not start in $Label's session, was stopped immediately, or could not write to the job folder (security software or a policy that blocks PowerShell for this user?)."
         }
         elseif ($mode -and $mode -ne 'FullLanguage') {
             $reason = "PowerShell runs in $mode mode for $Label (AppLocker / App Control policy), so the language cmdlets cannot run in the session."
@@ -3076,14 +3076,28 @@ finally {
                             $null = Backup-LPHive -Base $hku -Root $step.Sid -Label $step.Name -TargetId $step.Part -Sid $step.Sid -HivePath $step.HivePath -Specs $userSpecs
                             $w = Invoke-LPWorkerTask -Sid $step.Sid -Label $step.Name -Selection $sel -TimeoutMinutes $TaskTimeoutMinutes
                             foreach ($wn in @($w.Warnings)) { if ($wn) { Write-LPLog $wn -Level Warn } }
-                            if ($w.Success) {
+                            # The registry is the source of truth, not the worker's report: a worker can do its job and
+                            # still fail to report back (e.g. stopped by security software at the end).
+                            Start-Sleep -Seconds 2
+                            $iss = @()
+                            try {
+                                $st = Get-LPHiveState -Base $hku -Root $step.Sid -Layouts $Snapshot.KeyboardLayouts
+                                $iss = @(Test-LPStateCompliance -State $st -Selection $sel -Kind 'User' -SystemUILanguage $sel.DisplayLanguage)
+                            }
+                            catch { $iss = @("could not read the profile: $($_.Exception.Message)") }
+                            if ($iss.Count -eq 0) {
                                 $signOut.Add($step.Name)
-                                & $addResult $step 'Done' 'applied in the user''s session'
+                                if ($w.Success) { & $addResult $step 'Done' 'applied in the user''s session' }
+                                else {
+                                    Write-LPLog "The in-session step for $($step.Name) did not report back ($($w.Error)), but the profile matches - verified in the registry." -Level Warn
+                                    & $addResult $step 'Done' ("applied in the user's session and verified in the registry (the step did not report back: " + $w.Error + ')')
+                                }
                             }
                             else {
                                 # Fallback: write the verified reference straight into the user's loaded hive.
                                 # Same method as for users who are not signed in; active after sign-out/sign-in.
-                                Write-LPLog "In-session step for $($step.Name) failed: $($w.Error)" -Level Warn
+                                if ($w.Success) { Write-LPLog ("In-session step for $($step.Name) finished, but the profile still differs: " + ($iss -join '; ')) -Level Warn }
+                                else { Write-LPLog "In-session step for $($step.Name) failed: $($w.Error)" -Level Warn }
                                 Write-LPLog "Writing the profile directly into $($step.Name)'s registry instead (active after sign-out and sign-in)." -Level Warn
                                 if (-not $ctx.Reference) {
                                     $r = New-LPReference -Hku $hku -Selection $sel -Snapshot $Snapshot -TaskTimeoutMinutes $TaskTimeoutMinutes
@@ -3093,7 +3107,9 @@ finally {
                                 }
                                 Copy-LPReferenceToHive -Base $hku -Root $step.Sid -Reference $ctx.Reference -DisableSync ([bool]$sel.DisableSync)
                                 $signOut.Add($step.Name)
-                                & $addResult $step 'Warning' ("written directly into the profile - active after sign-out and sign-in. The in-session step did not run: " + $w.Error)
+                                $why = $w.Error
+                                if ($w.Success) { $why = 'profile still differed: ' + ($iss -join '; ') }
+                                & $addResult $step 'Warning' ("written directly into the profile - active after sign-out and sign-in. In-session step: " + $why)
                             }
                         }
                         else {
