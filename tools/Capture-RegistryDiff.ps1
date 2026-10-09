@@ -23,8 +23,13 @@
       Snapshot / Compare         Manual: -Scenario Snapshot -Name before ... (do something, e.g. in Settings)
                                  ... -Scenario Snapshot -Name after; then -Scenario Compare -Before <file> -After <file>.
 
-    Output (default .\diff-output): *_diff.txt (added/removed/changed values) and *_keys.txt (keys touched).
-    Please send both files back - they define the registry key list in README.md and $script:LanguageKeySet.
+    Output: C:\Users\Public\Documents\LanguageProfile-Diff (same folder for every account), unless -OutDir
+    is given. Per run: *_diff.txt (added/removed/changed values), *_keys.txt (keys touched), the raw
+    *_before.txt/*_after.txt dumps and a *_transcript.txt with everything that was printed (also errors).
+    Please send the *_diff.txt, *_keys.txt and *_transcript.txt files back.
+
+    Easiest: double-click tools\Capture-RegistryDiff.cmd and pick the scenario from the menu. Scenarios that
+    need administrator rights ask for elevation themselves. The window stays open at the end.
 
 .EXAMPLE
     # as the test user
@@ -35,23 +40,69 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Recipe', 'RecipeAsSystem', 'CopyToSystem', 'SystemPreferredUILanguage', 'Snapshot', 'Compare')][string]$Scenario,
+    [ValidateSet('', 'Recipe', 'RecipeAsSystem', 'CopyToSystem', 'SystemPreferredUILanguage', 'Snapshot', 'Compare')][string]$Scenario = '',
     [string]$DisplayLanguage = 'en-US',
     [string]$RegionalFormat = 'de-CH',
     [int]$GeoId = 223,
     [string[]]$Keyboard = @('00000807'),
-    [string]$OutDir = (Join-Path (Get-Location) 'diff-output'),
+    [string]$OutDir = (Join-Path $env:PUBLIC 'Documents\LanguageProfile-Diff'),
     [string]$Name = 'snapshot',
     [string]$Before,
     [string]$After,
-    [switch]$IncludeNoise
+    [switch]$IncludeNoise,
+    [switch]$NoPause
 )
 $ErrorActionPreference = 'Stop'
-if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'Run this in Windows PowerShell 5.1 (powershell.exe).' }
+
+function Write-Step([string]$Text, [string]$Color = 'Cyan') { Write-Host ('[{0:HH:mm:ss}] {1}' -f (Get-Date), $Text) -ForegroundColor $Color }
+function Wait-Close {
+    if ($NoPause) { return }
+    try { [void](Read-Host 'Press Enter to close this window') } catch { }
+}
+
+if ($PSVersionTable.PSEdition -ne 'Desktop') { Write-Host 'Run this in Windows PowerShell 5.1 (powershell.exe), not PowerShell 7.' -ForegroundColor Red; Wait-Close; exit 1 }
+$me = [Security.Principal.WindowsIdentity]::GetCurrent()
+$isAdmin = (New-Object Security.Principal.WindowsPrincipal($me)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $Scenario) {
+    Write-Host ''
+    Write-Host 'Language Profile - registry diff (VM ONLY: this changes language settings)' -ForegroundColor Yellow
+    Write-Host "Running as $($me.Name)$(if ($isAdmin) { ' (elevated)' } else { ' (not elevated)' })"
+    Write-Host ''
+    Write-Host '  1  Recipe                     run as the TEST USER, not elevated'
+    Write-Host '  2  RecipeAsSystem             needs admin (asks for elevation)'
+    Write-Host '  3  CopyToSystem               needs admin; run 1 in that admin account first'
+    Write-Host '  4  SystemPreferredUILanguage  needs admin, Windows 11'
+    Write-Host ''
+    $choice = Read-Host 'Scenario (1-4)'
+    $Scenario = @{ '1' = 'Recipe'; '2' = 'RecipeAsSystem'; '3' = 'CopyToSystem'; '4' = 'SystemPreferredUILanguage' }[$choice.Trim()]
+    if (-not $Scenario) { Write-Host 'No scenario selected.' -ForegroundColor Red; Wait-Close; exit 1 }
+}
+
+# Scenarios that need admin rights elevate themselves; the elevated window continues the run.
+if (-not $isAdmin -and $Scenario -in 'RecipeAsSystem', 'CopyToSystem', 'SystemPreferredUILanguage') {
+    Write-Step "$Scenario needs administrator rights - confirm the UAC prompt. The run continues in a new window." 'Yellow'
+    $a = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Scenario $Scenario -OutDir `"$OutDir`" -DisplayLanguage $DisplayLanguage -RegionalFormat $RegionalFormat -GeoId $GeoId -Keyboard $($Keyboard -join ',')"
+    try { Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $a -Verb RunAs }
+    catch { Write-Host "Elevation failed or was cancelled: $($_.Exception.Message)" -ForegroundColor Red }
+    Wait-Close
+    exit 0
+}
+if ($Scenario -eq 'Recipe' -and $isAdmin) {
+    Write-Host "WARNING: this window is elevated. The Recipe scenario changes the settings of the account running it ($($me.Name))." -ForegroundColor Yellow
+    Write-Host 'For the test user, run it from a normal (not elevated) window signed in as that user.' -ForegroundColor Yellow
+    if ((Read-Host 'Continue anyway? (y/n)') -notmatch '^[yYjJ]') { Wait-Close; exit 1 }
+}
+
+$Keyboard = @($Keyboard | ForEach-Object { ([string]$_).Split(',') } | Where-Object { $_ })
 $null = New-Item -ItemType Directory -Path $OutDir -Force
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$isAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$transcript = Join-Path $OutDir "${stamp}_${Scenario}_transcript.txt"
+try { Start-Transcript -LiteralPath $transcript -Force | Out-Null } catch { }
+Write-Step "Scenario $Scenario as $($me.Name). Output folder: $OutDir" 'Green'
 
+$exitCode = 0
+try {
 # Load the engine from LanguageProfile.ps1 (same worker code as the tool).
 $toolPath = Join-Path $PSScriptRoot '..\LanguageProfile.ps1'
 $tok = $null; $err = $null
@@ -118,6 +169,7 @@ function Get-Dump([string[]]$Areas) {
     $hklm = [Microsoft.Win32.RegistryKey]::OpenBaseKey('LocalMachine', 'Registry64')
     $lines = New-Object System.Collections.Generic.List[string]
     foreach ($a in $Areas) {
+        Write-Step "  reading $a ..." 'DarkGray'
         switch ($a) {
             'HKCU' { $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; foreach ($l in (Get-RegDump $hku $sid 'HKCU')) { $lines.Add($l) } }
             'DEFAULT' { foreach ($l in (Get-RegDump $hku '.DEFAULT' 'HKU\.DEFAULT')) { $lines.Add($l) } }
@@ -147,20 +199,27 @@ function Get-Dump([string[]]$Areas) {
 }
 
 function Write-Diff([string[]]$BeforeLines, [string[]]$AfterLines, [string]$Title) {
-    $parse = {
-        param($l)
-        $parts = $l -split ' \| ', 2
-        [pscustomobject]@{ Id = $parts[0] + $(if ($parts.Count -gt 1) { ' | ' + ($parts[1] -split ' \| ')[0] } else { '' }); Line = $l }
+    # Identity of a line = "key | value name" (everything before the second ' | ').
+    $b = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+    $a = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+    foreach ($pair in @(@($b, $BeforeLines), @($a, $AfterLines))) {
+        $dict = $pair[0]
+        foreach ($l in $pair[1]) {
+            $id = $l
+            $i = $l.IndexOf(' | ')
+            if ($i -ge 0) { $j = $l.IndexOf(' | ', $i + 3); if ($j -ge 0) { $id = $l.Substring(0, $j) } }
+            $dict[$id] = $l
+        }
     }
-    $b = @{}; foreach ($l in $BeforeLines) { $x = & $parse $l; $b[$x.Id] = $l }
-    $a = @{}; foreach ($l in $AfterLines) { $x = & $parse $l; $a[$x.Id] = $l }
     $res = New-Object System.Collections.Generic.List[string]
     $keys = New-Object System.Collections.Generic.SortedSet[string]
-    foreach ($id in ($a.Keys | Sort-Object)) {
+    $aIds = New-Object 'string[]' $a.Count; $a.Keys.CopyTo($aIds, 0); [Array]::Sort($aIds, [StringComparer]::Ordinal)
+    $bIds = New-Object 'string[]' $b.Count; $b.Keys.CopyTo($bIds, 0); [Array]::Sort($bIds, [StringComparer]::Ordinal)
+    foreach ($id in $aIds) {
         if (-not $b.ContainsKey($id)) { $res.Add("+ $($a[$id])"); [void]$keys.Add(($id -split ' \| ')[0].TrimEnd('\')) }
         elseif ($b[$id] -ne $a[$id]) { $res.Add("~ $($b[$id])"); $res.Add("  -> $($a[$id])"); [void]$keys.Add(($id -split ' \| ')[0].TrimEnd('\')) }
     }
-    foreach ($id in ($b.Keys | Sort-Object)) {
+    foreach ($id in $bIds) {
         if (-not $a.ContainsKey($id)) { $res.Add("- $($b[$id])"); [void]$keys.Add(($id -split ' \| ')[0].TrimEnd('\')) }
     }
     $os = Get-CimInstance Win32_OperatingSystem
@@ -171,8 +230,8 @@ function Write-Diff([string[]]$BeforeLines, [string[]]$AfterLines, [string]$Titl
     [IO.File]::WriteAllLines("${base}_keys.txt", [string[]]($header + @($keys)))
     [IO.File]::WriteAllLines("${base}_before.txt", [string[]]$BeforeLines)
     [IO.File]::WriteAllLines("${base}_after.txt", [string[]]$AfterLines)
-    Write-Host "$($res.Count) difference line(s) in $($keys.Count) key(s)."
-    Write-Host "Send back: ${base}_diff.txt and ${base}_keys.txt" -ForegroundColor Green
+    Write-Step "$($res.Count) difference line(s) in $($keys.Count) key(s)." 'Green'
+    $script:written = @("${base}_diff.txt", "${base}_keys.txt")
 }
 
 $sel = New-LPSelection -DisplayLanguage $DisplayLanguage -RegionalFormat $RegionalFormat -GeoId $GeoId -Keyboards $Keyboard -TargetIds @()
@@ -183,7 +242,8 @@ switch ($Scenario) {
         if ($isAdmin) { $areas += 'DEFAULT', 'S-1-5-19', 'S-1-5-20', 'HKLM', 'DefaultHive' }
         $file = Join-Path $OutDir "${stamp}_$Name.txt"
         [IO.File]::WriteAllLines($file, [string[]](Get-Dump $areas))
-        Write-Host "Snapshot written: $file"
+        Write-Step "Snapshot written: $file" 'Green'
+        $script:written = @($file)
     }
     'Compare' {
         if (-not $Before -or -not $After) { throw 'Use -Before <file> -After <file>.' }
@@ -191,15 +251,20 @@ switch ($Scenario) {
     }
     'Recipe' {
         $areas = @('HKCU', 'DEFAULT')
+        Write-Step 'Reading the registry BEFORE (can take 1-3 minutes, please wait)...'
         $before = Get-Dump $areas
+        Write-Step "  $($before.Count) lines" 'DarkGray'
         $job = Join-Path ([IO.Path]::GetTempPath()) "lpdiff-$stamp"
         $null = New-Item -ItemType Directory -Path (Join-Path $job 'out') -Force
         $j = [ordered]@{ ExpectedSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; DisplayLanguage = $sel.DisplayLanguage; RegionalFormat = $sel.RegionalFormat; GeoId = $sel.GeoId; Tips = @($sel.Tips); DisableSync = $true }
         [IO.File]::WriteAllText((Join-Path $job 'job.json'), ($j | ConvertTo-Json))
-        Write-Host "Running the recipe in this account ($($j.ExpectedSid))..."
+        Write-Step "Running the recipe in this account ($($me.Name), $($j.ExpectedSid))..."
         & ([scriptblock]::Create((Get-LPWorkerScriptText))) -JobDir $job
         Get-Content (Join-Path $job 'out\worker.log') | ForEach-Object { Write-Host "  $_" }
+        $wr = [IO.File]::ReadAllText((Join-Path $job 'out\result.json')) | ConvertFrom-Json
+        if ($wr.Success) { Write-Step 'Recipe: success' 'Green' } else { Write-Step "Recipe FAILED: $($wr.Error)" 'Red' }
         Start-Sleep -Seconds 3
+        Write-Step 'Reading the registry AFTER (can take 1-3 minutes)...'
         $after = Get-Dump $areas
         Write-Diff $before $after 'Recipe in the current user (worker code of LanguageProfile.ps1)'
     }
@@ -207,16 +272,20 @@ switch ($Scenario) {
         if (-not $isAdmin) { throw 'Run elevated.' }
         $null = Initialize-LPEngine -ScriptRoot (Split-Path $toolPath) -Console -LogName 'RegistryDiff'
         $areas = @('DEFAULT', 'S-1-5-19', 'S-1-5-20', 'HKLM')
+        Write-Step 'Reading the registry BEFORE...'
         $before = Get-Dump $areas
+        Write-Step 'Running the recipe as SYSTEM through a one-time scheduled task...'
         $w = Invoke-LPWorkerTask -Sid 'S-1-5-18' -Label 'SYSTEM (diff)' -Selection $sel
-        Write-Host ("Worker success: {0} {1}" -f $w.Success, $w.Error)
+        if ($w.Success) { Write-Step 'Worker as SYSTEM: success' 'Green' } else { Write-Step "Worker as SYSTEM FAILED: $($w.Error)" 'Red' }
         Start-Sleep -Seconds 3
+        Write-Step 'Reading the registry AFTER...'
         $after = Get-Dump $areas
         Write-Diff $before $after 'Recipe as SYSTEM via scheduled task (writes HKU\.DEFAULT)'
     }
     'CopyToSystem' {
         if (-not $isAdmin) { throw 'Run elevated.' }
         $areas = @('DEFAULT', 'S-1-5-19', 'S-1-5-20', 'HKLM', 'DefaultHive')
+        Write-Step 'Reading the registry BEFORE...'
         $before = Get-Dump $areas
         $build = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber
         if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
@@ -241,6 +310,7 @@ switch ($Scenario) {
             }
         }
         Start-Sleep -Seconds 5
+        Write-Step 'Reading the registry AFTER...'
         $after = Get-Dump $areas
         Write-Diff $before $after 'Microsoft copy to welcome screen / system accounts / new users'
     }
@@ -248,10 +318,32 @@ switch ($Scenario) {
         if (-not $isAdmin) { throw 'Run elevated.' }
         if (-not (Get-Command Set-SystemPreferredUILanguage -ErrorAction SilentlyContinue)) { throw 'Set-SystemPreferredUILanguage is not available on this Windows.' }
         $areas = @('DEFAULT', 'HKLM')
+        Write-Step 'Reading the registry BEFORE...'
         $before = Get-Dump $areas
+        Write-Step "Set-SystemPreferredUILanguage $DisplayLanguage"
         Set-SystemPreferredUILanguage -Language $DisplayLanguage
         Start-Sleep -Seconds 3
+        Write-Step 'Reading the registry AFTER...'
         $after = Get-Dump $areas
         Write-Diff $before $after "Set-SystemPreferredUILanguage $DisplayLanguage"
     }
 }
+}
+catch {
+    $exitCode = 1
+    Write-Host ''
+    Write-Host ('ERROR: ' + $_.Exception.Message) -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+}
+finally {
+    Write-Host ''
+    if ($script:written) {
+        Write-Step 'Done. Please send these files back:' 'Green'
+        foreach ($f in $script:written) { Write-Host "  $f" -ForegroundColor Green }
+        Write-Host "  $transcript" -ForegroundColor Green
+    }
+    else { Write-Step "No diff was written. Please send the transcript: $transcript" 'Yellow' }
+    try { Stop-Transcript | Out-Null } catch { }
+}
+Wait-Close
+exit $exitCode

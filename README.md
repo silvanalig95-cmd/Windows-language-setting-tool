@@ -25,7 +25,7 @@ language, one regional format and one or more keyboard layouts. The tool:
 | `LanguageProfile.cmd` | Launcher. Double-click for the GUI, or pass parameters for unattended mode. Uses 64-bit Windows PowerShell 5.1 even when started from a 32-bit process (Intune/SCCM). |
 | `LanguageProfile.ps1` | The tool. It contains the engine (no UI), the worker that runs inside a target account, the WPF front-end and the CLI. |
 | `presets.json` | Presets. IT can add more without touching code. |
-| `tools/Capture-RegistryDiff.ps1` | **VM only.** Diffs the registry before and after the recipe, to confirm which keys Windows writes. |
+| `tools/Capture-RegistryDiff.cmd` / `.ps1` | **VM only.** Diffs the registry before and after the recipe, to confirm which keys Windows writes. Double-click the `.cmd` and pick a scenario; output goes to `C:\Users\Public\Documents\LanguageProfile-Diff`. |
 | `tests/Engine.Tests.ps1`, `tests/Lint-PS51.ps1` | Unit tests and static checks. They run in `pwsh` on any OS. |
 | `tests/VM-TestPlan.md` | Acceptance tests for the "done means" list. |
 
@@ -300,8 +300,9 @@ signed in would need. Candidates:
 - `Software\Microsoft\Windows\CurrentVersion\Internet Settings\International\AcceptLanguage`;
 - `Software\Microsoft\Input` (Windows 11).
 
-Run `tools/Capture-RegistryDiff.ps1 -Scenario Recipe`, `-Scenario RecipeAsSystem` and
-`-Scenario CopyToSystem` in a VM and send back the `*_diff.txt` / `*_keys.txt` files. Any key that has
+Run `tools/Capture-RegistryDiff.cmd` in a VM (scenarios Recipe, RecipeAsSystem and CopyToSystem, see
+phase 0 of the test plan) and send back the `*_diff.txt`, `*_keys.txt` and `*_transcript.txt` files from
+`C:\Users\Public\Documents\LanguageProfile-Diff`. Any key that has
 to be added goes into `$script:LanguageKeySet` and this table.
 
 ## Backups, Restore, logs

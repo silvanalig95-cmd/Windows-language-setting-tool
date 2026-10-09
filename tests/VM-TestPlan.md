@@ -26,19 +26,23 @@ What to collect after each test (please send these back):
 ---
 
 ## Phase 0: registry diff (do this first; determines the key list)
-On **W10-EN** and **W11-EN**, from the **dirty** checkpoint:
-1. Signed in as alice, in a normal PowerShell window:
-   `powershell -ExecutionPolicy Bypass -File C:\LP\tools\Capture-RegistryDiff.ps1 -Scenario Recipe`
-2. Elevated, as admin:
-   `powershell -ExecutionPolicy Bypass -File C:\LP\tools\Capture-RegistryDiff.ps1 -Scenario RecipeAsSystem`
+On **W10-EN** and **W11-EN**, start each step from the **dirty** checkpoint. The steps change
+settings, so a second run without reverting would show no differences.
 
-   **Check:** the worker reports `Worker success: True`. This is the central assumption: the
-   cmdlets work as SYSTEM.
-3. Elevated, in the admin account. Run `-Scenario Recipe` there first, then:
-   `...\Capture-RegistryDiff.ps1 -Scenario CopyToSystem`. This captures Microsoft's own copy, for comparison.
-4. Windows 11 only: `...\Capture-RegistryDiff.ps1 -Scenario SystemPreferredUILanguage`
+Double-click `C:\LP\tools\Capture-RegistryDiff.cmd` and pick the scenario from the menu.
+- Scenarios that need admin rights ask for elevation and continue in a new window.
+- Reading the registry takes 1-3 minutes. The window shows progress and stays open at the end.
+- All output goes to **`C:\Users\Public\Documents\LanguageProfile-Diff`**, the same folder for every account.
 
-Send back all `diff-output\*_diff.txt` and `*_keys.txt`.
+1. Signed in as **alice**: double-click and pick **1 Recipe**. Expect "Recipe: success".
+2. Still as alice (or as admin): double-click and pick **2 RecipeAsSystem**, then enter the admin credentials.
+   **Check:** "Worker as SYSTEM: success". This is the central assumption: the cmdlets work as SYSTEM.
+3. Signed in as **admin**: pick **1 Recipe**, then **3 CopyToSystem**. This captures Microsoft's own copy, for comparison.
+4. Windows 11 only: pick **4 SystemPreferredUILanguage**.
+
+Send back everything in `C:\Users\Public\Documents\LanguageProfile-Diff` except the large
+`*_before.txt` / `*_after.txt` files: the `*_diff.txt`, `*_keys.txt` and `*_transcript.txt` files.
+If a run fails, the transcript contains the error.
 
 ## Phase 1: read-only checks (allowed on a normal PC, too)
 - [ ] `LanguageProfile.cmd -Status` runs without errors and lists every profile:
