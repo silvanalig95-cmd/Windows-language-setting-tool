@@ -296,6 +296,30 @@ $wa = [System.Management.Automation.Language.Parser]::ParseInput($wt, [ref]$wtok
 $cmdNames = @($wa.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
 Assert (Eq (@('Set-WinUserLanguageList', 'Set-WinDefaultInputMethodOverride', 'Set-WinUILanguageOverride', 'Set-Culture', 'Set-WinHomeLocation') | Where-Object { $cmdNames -contains $_ }) @('Set-WinUserLanguageList', 'Set-WinDefaultInputMethodOverride', 'Set-WinUILanguageOverride', 'Set-Culture', 'Set-WinHomeLocation')) 'worker runs the full recipe'
 
+# Worker bootstrap and failure diagnosis (in-session step blocked on a managed device)
+$boot = Get-LPWorkerBootstrap -OutDir "C:\ProgramData\LanguageProfile\Jobs\a'b\out" -WorkerPath 'C:\x\worker.ps1' -JobDir 'C:\x'
+$be = $null; $bt = $null
+$bast = [System.Management.Automation.Language.Parser]::ParseInput($boot, [ref]$bt, [ref]$be)
+Assert (@($be).Count -eq 0 -and $boot -match "a''b") 'bootstrap parses and quotes paths'
+$methodCalls = @($bast.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true) | ForEach-Object { $_.Extent.Text })
+Assert ((Eq $methodCalls @('[scriptblock]::Create((Get-Content -LiteralPath ''C:\x\worker.ps1'' -Raw -Encoding UTF8))'))) 'bootstrap makes no .NET calls before checking the language mode (works in Constrained Language Mode)'
+$tmpOut = Join-Path ([IO.Path]::GetTempPath()) ('lpfail-' + [guid]::NewGuid().ToString('N'))
+$null = New-Item -ItemType Directory -Path $tmpOut
+$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u' -TaskResult 'ended with result 0x00000001'
+Assert ($f.Reason -like '*did not start*' -and -not $f.WorkerStarted) 'no marker: PowerShell did not start / was stopped'
+Set-Content -LiteralPath (Join-Path $tmpOut 'started.txt') -Value 'started 2026-10-09T16:56:10 mode=ConstrainedLanguage'
+$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
+Assert ($f.Reason -like '*ConstrainedLanguage*' -and $f.LanguageMode -eq 'ConstrainedLanguage') 'Constrained Language Mode recognized'
+Set-Content -LiteralPath (Join-Path $tmpOut 'started.txt') -Value 'started 2026-10-09T16:56:10 mode=FullLanguage'
+Set-Content -LiteralPath (Join-Path $tmpOut 'bootstrap-error.txt') -Value 'This script contains malicious content and has been blocked by your antivirus software.'
+$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
+Assert ($f.Reason -like '*antivirus / AMSI*') 'antivirus block recognized'
+Remove-Item -LiteralPath (Join-Path $tmpOut 'bootstrap-error.txt')
+Set-Content -LiteralPath (Join-Path $tmpOut 'worker.log') -Value @('16:56:12 Step: Language list (Set-WinUserLanguageList)')
+$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
+Assert ($f.Reason -like '*stopped before it finished*Set-WinUserLanguageList*' -and $f.WorkerStarted) 'worker killed mid-way recognized'
+Remove-Item -LiteralPath $tmpOut -Recurse -Force
+
 # Dynamic scoping that Use-LPHive relies on (scriptblock sees the caller's locals inside the module)
 $m = New-Module -ScriptBlock {
     function Invoke-Inner { param([scriptblock]$Action) & $Action 'x' }

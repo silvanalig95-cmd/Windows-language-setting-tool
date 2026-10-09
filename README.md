@@ -12,10 +12,13 @@ language, one regional format and one or more keyboard layouts. The tool:
 > **Status: partly verified on Windows.** Verified on a Windows 11 Enterprise 25H2 (build 26200) company device:
 >
 > - the read-only Status and Preview;
-> - the 102 engine tests, in Windows PowerShell 5.1;
+> - the engine tests, in Windows PowerShell 5.1;
 > - the registry diff, including running the recipe as SYSTEM for the lock screen. The results are below.
 >
-> The full Apply and the acceptance tests in [`tests/VM-TestPlan.md`](tests/VM-TestPlan.md) are still open.
+> - a first full Apply: lock screen and new users verified. The in-session step for the signed-in user failed on
+>   a managed device, and the fallback for that case was added afterwards.
+>
+> The acceptance tests in [`tests/VM-TestPlan.md`](tests/VM-TestPlan.md) are still open.
 > The Status tab and the readiness check are read-only; Apply changes settings for the selected accounts.
 
 ## Files
@@ -132,7 +135,7 @@ LanguageProfile.cmd -DisplayLanguage en-US -RegionalFormat de-CH -GeoId 223 -Key
 ### How each target is written
 | Target | How |
 |---|---|
-| Signed-in user (owns an `explorer.exe`) | A one-time scheduled task runs the worker as that user (interactive, limited, only when logged on). The tool waits, collects the result and the worker log, then deletes the task and its job folder. |
+| Signed-in user (owns an `explorer.exe`) | A one-time scheduled task runs the worker as that user (interactive, limited, only when logged on). The tool waits, collects the result and the worker log, then deletes the task and its job folder. **Fallback:** if PowerShell cannot run the worker in that session, the verified reference is written directly into the user's loaded hive. This happens with security software, AppLocker / App Control (Constrained Language Mode) or a timeout. The settings are then active after sign-out and sign-in, and the result shows a warning with the reason. |
 | User whose profile is loaded without a desktop (e.g. the over-the-shoulder admin) | Written directly into `HKU\<SID>`. |
 | User who is not signed in | `NTUSER.DAT` is loaded under `HKU\LanguageProfile_<SID>`, written, then unloaded in `finally` (after `[gc]::Collect()`). Locked or damaged profiles are skipped with a warning. |
 | Lock/welcome screen | The worker runs **as SYSTEM**. The SYSTEM account's hive is `HKU\.DEFAULT`, which is the lock screen. Also `Set-SystemPreferredUILanguage` where it exists. |
@@ -340,6 +343,10 @@ the results go to `C:\Users\Public\Documents\LanguageProfile-Diff`.
 ## Known limitations
 - Text-services input methods (Japanese, Chinese and Korean IMEs) are not offered. The keyboard list contains classic layouts (KLIDs) only.
 - A short console flash may appear in a signed-in user's session while the one-time task runs.
+- On managed devices, PowerShell may be blocked or restricted for standard users. In that case the in-session step can't run, and the fallback writes the user's profile directly. The new settings show up only after sign-out and sign-in, not immediately. The log names the reason:
+  - "did not start / was stopped": security software, or a policy that blocks PowerShell;
+  - "ConstrainedLanguage": AppLocker / App Control;
+  - "antivirus / AMSI".
 - While an offline profile's hive is loaded, which takes a few seconds, that user cannot sign in.
 - On Windows 10 it is not documented whether the `LanguagePackManagement` module (`Install-Language`) is present. The tool checks at runtime and shows the manual steps if it is not.
 - If an execution policy is enforced by GPO (`AllSigned`), `LanguageProfile.ps1` itself won't start: sign it. The per-user worker is unaffected (it is loaded as a script block).
@@ -348,6 +355,6 @@ the results go to `C:\Users\Public\Documents\LanguageProfile-Diff`.
 ## Development
 ```
 pwsh -File tests/Lint-PS51.ps1        # parse, PS 5.1 compatibility, ASCII-only, XAML names
-pwsh -File tests/Engine.Tests.ps1     # 102 engine tests; registry logic runs against a fake registry
+pwsh -File tests/Engine.Tests.ps1     # 108 engine tests; registry logic runs against a fake registry
                                       # loaded with real Windows 11 25H2 data (tests/fixtures)
 ```

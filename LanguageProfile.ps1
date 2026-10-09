@@ -1955,7 +1955,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                     & $add "target:$tid" "$($t.Name) is signed in, but the Task Scheduler service is not running" 'Blocked' @('Signed-in users are configured inside their own session through a one-time scheduled task.') @('Start the "Task Scheduler" service, then run the tool again.') @($tid)
                 }
                 else {
-                    & $add "target:$tid" "$($t.Name) (signed in): applied inside the user's session" 'OK' @('A one-time scheduled task runs the language cmdlets as this user; it is deleted afterwards. Sign-out needed for the display language.') $null $null
+                    & $add "target:$tid" "$($t.Name) (signed in): applied inside the user's session" 'OK' @('A one-time scheduled task runs the language cmdlets as this user; it is deleted afterwards. Sign-out needed for the display language.', 'If PowerShell is blocked or restricted for this user (security software, AppLocker / App Control), the settings are written directly into the profile instead and take effect after sign-out and sign-in.') $null $null
                 }
             }
             elseif ($t.HiveLoaded) {
@@ -1994,7 +1994,10 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             $keep = @($disp)
             if (-not $wantLock -and $Snapshot.Languages.SystemPreferredUILanguage) { $keep += $Snapshot.Languages.SystemPreferredUILanguage }
             $remove = @($langs.Installed | Where-Object { $keep -notcontains $_ })
-            if ($remove.Count -eq 0) { & $add 'uninstall' 'No other language packs installed' 'OK' $null $null $null }
+            if ($remove.Count -eq 0) {
+                & $add 'uninstall' 'Uninstall other language packs: there are none - en-US is the only display language pack on this PC' 'OK' @(
+                    'A display language pack is the translated Windows interface (Settings shows "language pack" under the language). Languages that are only in a language list, for example English (United Kingdom) without a pack, are not packs. The profile removes them from the lists of the selected accounts anyway (see the preview).') $null $null
+            }
             elseif (-not $caps.UninstallLanguage) {
                 & $add 'uninstall' ('Other language packs (' + ($remove -join ', ') + ') cannot be removed automatically') 'Blocked' @('Uninstall-Language is not available on this Windows version.') @('Settings > Time & language > Language & region > (language) > Remove, or IT: DISM /Online /Remove-Package for the language pack package.') @('uninstall')
             }
@@ -2007,7 +2010,8 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                 }
                 if ($users.Count -gt 0) { $d += ('These NOT selected users use one of them as display language and will fall back: ' + ($users -join ', ')) }
                 if (-not $wantLock) { $d += "The system UI language $($Snapshot.Languages.SystemPreferredUILanguage) is kept because the lock screen is not selected." }
-                & $add 'uninstall' ('Language packs to uninstall: ' + ($remove -join ', ')) 'Auto' $d $null $null
+                $d = @('Display language packs (translated Windows interface) are removed for the whole PC. Languages that are only in a language list are removed from the selected accounts anyway.') + $d
+                & $add 'uninstall' ('Display language packs to uninstall: ' + ($remove -join ', ')) 'Auto' $d $null $null
             }
         }
         if ($sp.Count -gt 0) {
@@ -2571,7 +2575,56 @@ finally {
         if ($r.ExitCode -ne 0) { throw "icacls failed on $Path : $($r.Output)" }
     }
 
+    # Explains why a worker task ended without a result, from the marker files the bootstrap writes.
+    function Get-LPWorkerFailure {
+        param([Parameter(Mandatory)][string]$OutDir, [string]$Label, [string]$TaskResult)
+        $read = { param($f) $p = Join-Path $OutDir $f; if (Test-Path -LiteralPath $p) { (@(Get-Content -LiteralPath $p -Encoding UTF8) -join "`n").Trim() } else { $null } }
+        $started = & $read 'started.txt'
+        $bootErr = & $read 'bootstrap-error.txt'
+        $wlog = & $read 'worker.log'
+        $detail = New-Object System.Collections.Generic.List[string]
+        if ($TaskResult) { $detail.Add("Task result: $TaskResult") }
+        if ($started) { $detail.Add("Bootstrap: $started") }
+        if ($bootErr) { $detail.Add("Error: $bootErr") }
+        if ($wlog) { foreach ($l in ($wlog -split "`n")) { $detail.Add("Worker: $l") } }
+        $reason = 'PowerShell in the session ended without a result.'
+        $mode = $null
+        if ($started -match 'mode=(\w+)') { $mode = $Matches[1] }
+        if (-not $started) {
+            $reason = "PowerShell did not start in $Label's session, or was stopped immediately (security software or a policy that blocks PowerShell for this user?)."
+        }
+        elseif ($mode -and $mode -ne 'FullLanguage') {
+            $reason = "PowerShell runs in $mode mode for $Label (AppLocker / App Control policy), so the language cmdlets cannot run in the session."
+        }
+        elseif ($bootErr) {
+            $first = ($bootErr -split "`n")[0]
+            $reason = "The worker could not run in $Label's session: $first"
+            if ($bootErr -match '(?i)malicious|antivirus|AMSI') { $reason += ' (blocked by the antivirus / AMSI)' }
+        }
+        elseif ($wlog) {
+            $reason = "The worker in $Label's session stopped before it finished (killed by security software?). Last log line: " + (($wlog -split "`n")[-1])
+        }
+        return [pscustomobject]@{ Reason = $reason; LanguageMode = $mode; Detail = $detail.ToArray(); WorkerStarted = [bool]$wlog }
+    }
+
+    # Bootstrap of the worker task, passed with -EncodedCommand (no quoting issues; an enforced execution
+    # policy does not apply to it). It only uses cmdlets, so it also works in Constrained Language Mode and
+    # reports that mode, or any error, through marker files in out\.
+    function Get-LPWorkerBootstrap {
+        param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$WorkerPath, [Parameter(Mandatory)][string]$JobDir)
+        $q = { param($t) $t.Replace("'", "''") }
+        return (@(
+                ("`$o = '{0}'" -f (& $q $OutDir))
+                '$m = [string]$ExecutionContext.SessionState.LanguageMode'
+                'Set-Content -LiteralPath (Join-Path $o ''started.txt'') -Value (''started '' + (Get-Date -Format s) + '' mode='' + $m)'
+                'if ($m -ne ''FullLanguage'') { exit 3 }'
+                ("try {{ & ([scriptblock]::Create((Get-Content -LiteralPath '{0}' -Raw -Encoding UTF8))) -JobDir '{1}' }}" -f (& $q $WorkerPath), (& $q $JobDir))
+                'catch { Set-Content -LiteralPath (Join-Path $o ''bootstrap-error.txt'') -Value ($_ | Out-String); exit 4 }'
+            ) -join "`n")
+    }
+
     # Runs the worker as $Sid through a one-time scheduled task, waits, returns the result, cleans up.
+    # Never throws after the task was created: failures come back as Success = $false with a reason.
     function Invoke-LPWorkerTask {
         param([Parameter(Mandatory)][string]$Sid, [Parameter(Mandatory)][string]$Label, [Parameter(Mandatory)]$Selection, [int]$TimeoutMinutes = 10)
         $isSystem = ($Sid -eq 'S-1-5-18')
@@ -2580,6 +2633,7 @@ finally {
         $outDir = Join-Path $jobDir 'out'
         $taskName = "LanguageProfile-$guid"
         $registered = $false
+        $fail = { param($Reason, $Detail) [pscustomobject]@{ Success = $false; Error = $Reason; Detail = @($Detail); Steps = @(); Warnings = @(); After = $null; RunAs = $null; WorkerStarted = $false } }
         try {
             $null = New-Item -ItemType Directory -Path $outDir -Force
             # Job folder: SYSTEM + Administrators full; the target user may read it and write only to out\.
@@ -2602,10 +2656,7 @@ finally {
             $workerPath = Join-Path $jobDir 'worker.ps1'
             [IO.File]::WriteAllText($workerPath, (Get-LPWorkerScriptText), $utf8)
 
-            # The worker text is loaded as a script block, so an enforced execution policy (AllSigned)
-            # does not block it. The bootstrap is passed with -EncodedCommand (no quoting issues).
-            $boot = "& ([scriptblock]::Create([IO.File]::ReadAllText('{0}'))) -JobDir '{1}'" -f $workerPath.Replace("'", "''"), $jobDir.Replace("'", "''")
-            $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
+            $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-LPWorkerBootstrap -OutDir $outDir -WorkerPath $workerPath -JobDir $jobDir)))
             $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
             $action = New-ScheduledTaskAction -Execute $psExe -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $enc"
             $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes ($TimeoutMinutes + 2)) -MultipleInstances IgnoreNew
@@ -2630,7 +2681,7 @@ finally {
                 }
                 catch { $lastErr = $_.Exception.Message }
             }
-            if (-not $registered) { throw "Could not create the scheduled task for $Label : $lastErr" }
+            if (-not $registered) { return (& $fail "Could not create the scheduled task for $Label : $lastErr" @()) }
 
             Write-LPLog "Running the language cmdlets as $Label (task $($script:TaskPath)$taskName)..." -Level Detail
             $started = Get-Date
@@ -2638,8 +2689,9 @@ finally {
             $resultFile = Join-Path $outDir 'result.json'
             $deadline = $started.AddMinutes($TimeoutMinutes)
             $sawRunning = $false
+            $ended = $null
             while (-not (Test-Path -LiteralPath $resultFile)) {
-                if ((Get-Date) -gt $deadline) { throw "The task for $Label did not finish within $TimeoutMinutes minutes." }
+                if ((Get-Date) -gt $deadline) { $ended = "did not finish within $TimeoutMinutes minutes"; break }
                 Start-Sleep -Milliseconds 700
                 $t = Get-ScheduledTask -TaskPath $script:TaskPath -TaskName $taskName -ErrorAction SilentlyContinue
                 if (-not $t) { continue }
@@ -2647,22 +2699,53 @@ finally {
                 $info = Get-ScheduledTaskInfo -InputObject $t -ErrorAction SilentlyContinue
                 if ($info -and $info.LastRunTime -and $info.LastRunTime -ge $started.AddSeconds(-5) -and $info.LastTaskResult -ne 267009 -and $info.LastTaskResult -ne 267011) {
                     Start-Sleep -Seconds 2
-                    if (-not (Test-Path -LiteralPath $resultFile)) { throw ("The task for {0} ended (result 0x{1:X8}) without writing a result." -f $Label, $info.LastTaskResult) }
+                    if (-not (Test-Path -LiteralPath $resultFile)) { $ended = ('ended with result 0x{0:X8} after {1:N0} s' -f $info.LastTaskResult, ((Get-Date) - $started).TotalSeconds) }
+                    break
                 }
-                if (-not $sawRunning -and ((Get-Date) - $started).TotalSeconds -gt 90) {
-                    throw "The task for $Label did not start within 90 seconds. Is the user's session still active?"
-                }
+                if (-not $sawRunning -and ((Get-Date) - $started).TotalSeconds -gt 90) { $ended = 'did not start within 90 seconds (is the session still active?)'; break }
+            }
+            if (-not (Test-Path -LiteralPath $resultFile)) {
+                $f = Get-LPWorkerFailure -OutDir $outDir -Label $Label -TaskResult $ended
+                Write-LPLog ("The task for $Label $ended. " + $f.Reason) -Level Warn
+                foreach ($d in $f.Detail) { Write-LPLog ("  [$Label] $d") -Level Detail }
+                $r = & $fail $f.Reason $f.Detail
+                $r.WorkerStarted = $f.WorkerStarted
+                return $r
             }
             $res = [IO.File]::ReadAllText($resultFile) | ConvertFrom-Json
             $logLines = @()
             $wl = Join-Path $outDir 'worker.log'
             if (Test-Path -LiteralPath $wl) { $logLines = @(Get-Content -LiteralPath $wl -Encoding UTF8) }
             foreach ($l in $logLines) { Write-LPLog ("  [$Label] $l") -Level Detail }
-            return [pscustomobject]@{ Success = [bool]$res.Success; Error = $res.Error; Steps = @($res.Steps); Warnings = @($res.Warnings); After = $res.After; RunAs = $res.User }
+            return [pscustomobject]@{ Success = [bool]$res.Success; Error = $res.Error; Detail = @(); Steps = @($res.Steps); Warnings = @($res.Warnings); After = $res.After; RunAs = $res.User; WorkerStarted = $true }
+        }
+        catch {
+            return (& $fail ("Running the worker for {0} failed: {1}" -f $Label, $_.Exception.Message) @())
         }
         finally {
             if ($registered) { try { Unregister-ScheduledTask -TaskPath $script:TaskPath -TaskName $taskName -Confirm:$false -ErrorAction Stop } catch { Write-LPLog "Could not delete task $taskName : $($_.Exception.Message)" -Level Warn } }
             try { Remove-Item -LiteralPath $jobDir -Recurse -Force -ErrorAction Stop } catch { }
+        }
+    }
+
+    # The SYSTEM account's hive is HKU\.DEFAULT = the lock/welcome screen. Windows' own cmdlets run there
+    # and produce the exact values that are then copied elsewhere. On any failure .DEFAULT is put back.
+    function New-LPReference {
+        param([Parameter(Mandatory)]$Hku, [Parameter(Mandatory)]$Selection, [Parameter(Mandatory)]$Snapshot, [int]$TaskTimeoutMinutes = 10)
+        $backup = Backup-LPHive -Base $Hku -Root '.DEFAULT' -Label 'LockScreen_DEFAULT' -TargetId 'lockscreen' -Sid 'S-1-5-18' -Specs $script:LanguageKeySet
+        try {
+            $w = Invoke-LPWorkerTask -Sid 'S-1-5-18' -Label 'SYSTEM (lock screen)' -Selection $Selection -TimeoutMinutes $TaskTimeoutMinutes
+            foreach ($wn in @($w.Warnings)) { if ($wn) { Write-LPLog $wn -Level Warn } }
+            if (-not $w.Success) { throw "Applying the profile to the SYSTEM account failed: $($w.Error)" }
+            $ref = @(foreach ($s in $script:LanguageKeySet) { Get-LPKeySnapshot -Base $Hku -Root '.DEFAULT' -Spec $s })
+            $refState = Get-LPHiveState -Base $Hku -Root '.DEFAULT' -Layouts $Snapshot.KeyboardLayouts
+            $iss = @(Test-LPStateCompliance -State $refState -Selection $Selection -Kind 'LockScreen' -SystemUILanguage $Selection.DisplayLanguage)
+            if ($iss.Count -gt 0) { throw ('The reference produced by Windows does not match the profile: ' + ($iss -join '; ')) }
+            return [pscustomobject]@{ Reference = $ref; Backup = $backup }
+        }
+        catch {
+            try { foreach ($snap in $backup) { Set-LPKeyFromSnapshot -Base $Hku -Root '.DEFAULT' -Snapshot $snap }; Write-LPLog 'Lock screen put back to its previous state.' -Level Warn } catch { }
+            throw
         }
     }
 
@@ -2911,8 +2994,9 @@ finally {
         $failed = $false
         $blockedByPack = $false
         $cancelled = $false
-        $reference = $null
-        $referenceBackup = $null
+        # Reference = the language keys of .DEFAULT after the SYSTEM recipe. Created by the 'Reference' step,
+        # or on demand when a signed-in user has to be written directly (fallback).
+        $ctx = @{ Reference = $null; ReferenceBackup = $null; LazyReference = $false }
         $hku = Get-LPBaseKey 'Users'
         $hklm = Get-LPBaseKey 'LocalMachine'
         $userSpecs = @($script:LanguageKeySet) + @($script:SyncKeySpec)
@@ -2958,26 +3042,19 @@ finally {
                         & $addResult $step 'Done' ''
                     }
                     'Reference' {
-                        # The SYSTEM account's hive is HKU\.DEFAULT = the lock/welcome screen. Windows' own
-                        # cmdlets run there and produce the exact values that are then copied elsewhere.
-                        $referenceBackup = Backup-LPHive -Base $hku -Root '.DEFAULT' -Label 'LockScreen_DEFAULT' -TargetId 'lockscreen' -Sid 'S-1-5-18' -Specs $script:LanguageKeySet
-                        $w = Invoke-LPWorkerTask -Sid 'S-1-5-18' -Label 'SYSTEM (lock screen)' -Selection $sel -TimeoutMinutes $TaskTimeoutMinutes
-                        foreach ($wn in @($w.Warnings)) { if ($wn) { Write-LPLog $wn -Level Warn } }
-                        if (-not $w.Success) { throw "Applying the profile to the SYSTEM account failed: $($w.Error)" }
-                        $reference = @(foreach ($s in $script:LanguageKeySet) { Get-LPKeySnapshot -Base $hku -Root '.DEFAULT' -Spec $s })
-                        $refState = Get-LPHiveState -Base $hku -Root '.DEFAULT' -Layouts $Snapshot.KeyboardLayouts
-                        $iss = @(Test-LPStateCompliance -State $refState -Selection $sel -Kind 'LockScreen' -SystemUILanguage $sel.DisplayLanguage)
-                        if ($iss.Count -gt 0) { throw ('The reference produced by Windows does not match the profile: ' + ($iss -join '; ')) }
+                        $r = New-LPReference -Hku $hku -Selection $sel -Snapshot $Snapshot -TaskTimeoutMinutes $TaskTimeoutMinutes
+                        $ctx.Reference = $r.Reference
+                        $ctx.ReferenceBackup = $r.Backup
                         & $addResult $step 'Done' ''
                         if ($step.KeepLockScreen) { $restartReasons.Add('the lock/welcome screen changed') }
                     }
                     'SystemAccounts' {
-                        if (-not $reference) { throw 'No reference available.' }
+                        if (-not $ctx.Reference) { throw 'No reference available.' }
                         foreach ($sid in 'S-1-5-19', 'S-1-5-20') {
                             try {
                                 if (-not (Test-LPRegKey $hku $sid)) { Write-LPLog "HKU\$sid is not loaded; skipped." -Level Warn; continue }
                                 $null = Backup-LPHive -Base $hku -Root $sid -Label "SystemAccount_$sid" -TargetId 'lockscreen' -Sid $sid -Specs $script:LanguageKeySet
-                                Copy-LPReferenceToHive -Base $hku -Root $sid -Reference $reference -DisableSync $false
+                                Copy-LPReferenceToHive -Base $hku -Root $sid -Reference $ctx.Reference -DisableSync $false
                                 Write-LPLog "Copied to HKU\$sid" -Level OK
                             }
                             catch { Write-LPLog "Could not write HKU\$sid : $($_.Exception.Message)" -Level Warn }
@@ -2985,11 +3062,11 @@ finally {
                         & $addResult $step 'Done' ''
                     }
                     'NewUsers' {
-                        if (-not $reference) { throw 'No reference available.' }
+                        if (-not $ctx.Reference) { throw 'No reference available.' }
                         $null = Use-LPHive -HivePath $step.HivePath -Label 'DefaultUser' -Action {
                             param($b, $r)
                             $null = Backup-LPHive -Base $b -Root $r -Label 'DefaultProfile' -TargetId 'newusers' -HivePath $step.HivePath -Specs $userSpecs
-                            Copy-LPReferenceToHive -Base $b -Root $r -Reference $reference -DisableSync ([bool]$sel.DisableSync)
+                            Copy-LPReferenceToHive -Base $b -Root $r -Reference $ctx.Reference -DisableSync ([bool]$sel.DisableSync)
                         }
                         & $addResult $step 'Done' ''
                     }
@@ -2999,17 +3076,33 @@ finally {
                             $null = Backup-LPHive -Base $hku -Root $step.Sid -Label $step.Name -TargetId $step.Part -Sid $step.Sid -HivePath $step.HivePath -Specs $userSpecs
                             $w = Invoke-LPWorkerTask -Sid $step.Sid -Label $step.Name -Selection $sel -TimeoutMinutes $TaskTimeoutMinutes
                             foreach ($wn in @($w.Warnings)) { if ($wn) { Write-LPLog $wn -Level Warn } }
-                            if (-not $w.Success) { throw "The worker in $($step.Name)'s session failed: $($w.Error) (see log; the backup can restore this user)" }
-                            $signOut.Add($step.Name)
-                            & $addResult $step 'Done' 'applied in the user''s session'
+                            if ($w.Success) {
+                                $signOut.Add($step.Name)
+                                & $addResult $step 'Done' 'applied in the user''s session'
+                            }
+                            else {
+                                # Fallback: write the verified reference straight into the user's loaded hive.
+                                # Same method as for users who are not signed in; active after sign-out/sign-in.
+                                Write-LPLog "In-session step for $($step.Name) failed: $($w.Error)" -Level Warn
+                                Write-LPLog "Writing the profile directly into $($step.Name)'s registry instead (active after sign-out and sign-in)." -Level Warn
+                                if (-not $ctx.Reference) {
+                                    $r = New-LPReference -Hku $hku -Selection $sel -Snapshot $Snapshot -TaskTimeoutMinutes $TaskTimeoutMinutes
+                                    $ctx.Reference = $r.Reference
+                                    $ctx.ReferenceBackup = $r.Backup
+                                    $ctx.LazyReference = $true
+                                }
+                                Copy-LPReferenceToHive -Base $hku -Root $step.Sid -Reference $ctx.Reference -DisableSync ([bool]$sel.DisableSync)
+                                $signOut.Add($step.Name)
+                                & $addResult $step 'Warning' ("written directly into the profile - active after sign-out and sign-in. The in-session step did not run: " + $w.Error)
+                            }
                         }
                         else {
-                            if (-not $reference) { throw "$($step.Name) is no longer signed in, and no reference was prepared for profiles that are not signed in. Run the tool again." }
+                            if (-not $ctx.Reference) { throw "$($step.Name) is no longer signed in, and no reference was prepared for profiles that are not signed in. Run the tool again." }
                             try {
                                 $null = Use-LPHive -Sid $step.Sid -HivePath $step.HivePath -Label $step.Sid -Action {
                                     param($b, $r)
                                     $null = Backup-LPHive -Base $b -Root $r -Label $step.Name -TargetId $step.Part -Sid $step.Sid -HivePath $step.HivePath -Specs $userSpecs
-                                    Copy-LPReferenceToHive -Base $b -Root $r -Reference $reference -DisableSync ([bool]$sel.DisableSync)
+                                    Copy-LPReferenceToHive -Base $b -Root $r -Reference $ctx.Reference -DisableSync ([bool]$sel.DisableSync)
                                 }
                                 $nextSignIn.Add($step.Name)
                                 & $addResult $step 'Done' 'written into the profile'
@@ -3024,8 +3117,8 @@ finally {
                         }
                     }
                     'RestoreReference' {
-                        if ($referenceBackup) {
-                            foreach ($snap in $referenceBackup) { Set-LPKeyFromSnapshot -Base $hku -Root '.DEFAULT' -Snapshot $snap }
+                        if ($ctx.ReferenceBackup) {
+                            foreach ($snap in $ctx.ReferenceBackup) { Set-LPKeyFromSnapshot -Base $hku -Root '.DEFAULT' -Snapshot $snap }
                             Write-LPLog 'Lock screen restored to its previous state (it was only used as reference).' -Level OK
                         }
                         & $addResult $step 'Done' ''
@@ -3043,17 +3136,25 @@ finally {
                 Write-LPLog ("FAILED: {0}: {1}" -f $step.Title, $_.Exception.Message) -Level Error
                 & $addResult $step 'Failed' $_.Exception.Message
                 if ($step.Kind -eq 'Reference') {
-                    # Without a reference nothing can be copied. Put the lock screen back and stop.
-                    if ($referenceBackup) { try { foreach ($snap in $referenceBackup) { Set-LPKeyFromSnapshot -Base $hku -Root '.DEFAULT' -Snapshot $snap }; Write-LPLog 'Lock screen restored.' -Level Warn } catch { } }
+                    # Without a reference nothing can be copied (New-LPReference already put the lock screen back). Stop.
                     $blockedByPack = $true
                 }
             }
         }
 
+        # A reference created on demand for a fallback is only temporary unless the lock screen is a target.
+        if ($ctx.LazyReference -and -not (@($Plan.Parts) -contains 'lockscreen') -and $ctx.ReferenceBackup) {
+            try {
+                foreach ($snap in $ctx.ReferenceBackup) { Set-LPKeyFromSnapshot -Base $hku -Root '.DEFAULT' -Snapshot $snap }
+                Write-LPLog 'Lock screen restored to its previous state (it was only used as reference).' -Level OK
+            }
+            catch { Write-LPLog "Could not restore the lock screen: $($_.Exception.Message)" -Level Error; $failed = $true }
+        }
+
         # Verify what was written (fresh read).
         if (-not $cancelled -and -not $blockedByPack) {
             Write-LPLog 'Verifying...' -Level Step
-            $doneSteps = @($results | Where-Object { $_.Status -eq 'Done' } | ForEach-Object { $_.Step })
+            $doneSteps = @($results | Where-Object { $_.Status -eq 'Done' -or ($_.Status -eq 'Warning' -and $_.Kind -eq 'User') } | ForEach-Object { $_.Step })
             foreach ($step in @($doneSteps | Where-Object { $_.Kind -eq 'User' -or $_.Kind -eq 'NewUsers' -or ($_.Kind -eq 'Reference' -and $_.KeepLockScreen) })) {
                 try {
                     $st = $null
@@ -3328,7 +3429,7 @@ $LPXaml = @'
                   <CheckBox x:Name="ChkSysLocale" Margin="0"><TextBlock x:Name="TxtSysLocaleLabel" Text="Set the system locale for non-Unicode programs" TextWrapping="Wrap"/></CheckBox>
                   <TextBlock Margin="20,0,0,6" Foreground="#B26A00" TextWrapping="Wrap" Text="Needs a restart. Older (non-Unicode) programs may show garbled text if they expect another code page."/>
                   <CheckBox x:Name="ChkUninstall" Margin="0"><TextBlock Text="Uninstall other language packs" TextWrapping="Wrap"/></CheckBox>
-                  <TextBlock Margin="20,0,0,6" Foreground="#C62828" TextWrapping="Wrap" Text="WARNING: removes every other installed display language from this PC - for ALL users, also those not selected. The display language being applied is never removed. Needs a restart. Restore does not bring removed packs back."/>
+                  <TextBlock Margin="20,0,0,6" Foreground="#C62828" TextWrapping="Wrap" Text="WARNING: removes every other installed display language pack (translated Windows interface) from this PC - for ALL users, also those not selected. The display language being applied is never removed. Needs a restart. Restore does not bring removed packs back. Not needed to remove languages from the lists - Apply does that anyway."/>
                   <TextBlock Text="Language pack source folder (optional, for WSUS or offline PCs):" Margin="0,4,0,2"/>
                   <DockPanel>
                     <Button DockPanel.Dock="Right" x:Name="BtnBrowseSource" Content="Browse..." Margin="6,0,0,0"/>
