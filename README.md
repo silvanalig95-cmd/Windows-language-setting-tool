@@ -9,14 +9,14 @@ language, one regional format and one or more keyboard layouts. The tool:
 - removes every other language and keyboard from those places;
 - stops Windows from adding layouts back.
 
-> **Status: not yet verified on Windows.** The code was written and statically checked on Linux:
-> a PowerShell 5.1 compatibility lint and 75 unit tests of the engine logic pass (`tests/`).
-> Nothing has run on Windows yet. Two things still need a VM before the tool can be trusted:
+> **Status: partly verified on Windows.** Verified on a Windows 11 Enterprise 25H2 (build 26200) company device:
 >
-> - the registry diff (`tools/Capture-RegistryDiff.ps1`);
-> - the acceptance tests in [`tests/VM-TestPlan.md`](tests/VM-TestPlan.md).
+> - the read-only Status and Preview;
+> - the 102 engine tests, in Windows PowerShell 5.1;
+> - the registry diff, including running the recipe as SYSTEM for the lock screen. The results are below.
 >
-> **Do not run Apply on a production PC.** The Status tab and the readiness check are read-only.
+> The full Apply and the acceptance tests in [`tests/VM-TestPlan.md`](tests/VM-TestPlan.md) are still open.
+> The Status tab and the readiness check are read-only; Apply changes settings for the selected accounts.
 
 ## Files
 
@@ -26,11 +26,11 @@ language, one regional format and one or more keyboard layouts. The tool:
 | `LanguageProfile.ps1` | The tool. It contains the engine (no UI), the worker that runs inside a target account, the WPF front-end and the CLI. |
 | `presets.json` | Presets. IT can add more without touching code. |
 | `tools/Capture-RegistryDiff.cmd` / `.ps1` | **VM only.** Diffs the registry before and after the recipe, to confirm which keys Windows writes. Double-click the `.cmd` and pick a scenario; output goes to `C:\Users\Public\Documents\LanguageProfile-Diff`. |
-| `tests/Engine.Tests.ps1`, `tests/Lint-PS51.ps1` | Unit tests and static checks. They run in `pwsh` on any OS. |
+| `tests/Engine.Tests.ps1`, `tests/Lint-PS51.ps1`, `tests/fixtures/` | Unit tests and static checks. They run in `pwsh` on any OS; the engine tests also run in Windows PowerShell 5.1. |
 | `tests/VM-TestPlan.md` | Acceptance tests for the "done means" list. |
 
 Requirements:
-- Windows 10 22H2, or Windows 11 23H2/24H2.
+- Windows 10 22H2, or Windows 11 23H2/24H2/25H2.
 - Windows PowerShell 5.1. The tool refuses to run in PowerShell 7, where the International module misbehaves.
 - No installs and no external modules.
 
@@ -150,8 +150,14 @@ The **recipe** that runs inside an account:
 7. Rewrite `Keyboard Layout\Preload` so that only entries resolving (through `Substitutes`) to the
    chosen tips remain, in the chosen order, renumbered 1..n. Unreferenced `Substitutes` are dropped.
 
-   For example, Swiss German on en-US becomes `Preload 1 = d0010409` with `Substitutes d0010409 = 00000807`.
-8. Optionally, language sync off.
+   On Windows 11 25H2, Windows itself writes Swiss German on en-US as `Preload 1 = 00000409` with
+   `Substitutes 00000409 = 00000807`. Older builds use `d0010409 -> 00000807`. Both are understood,
+   and the tool keeps whatever Windows wrote.
+8. Make `User Profile System Backup` an exact copy of `User Profile`. `Set-WinUserLanguageList` does
+   not update the backup, and Windows can restore the language list from it.
+9. Remove text-input (CTF) entries for every language except the display language. Windows leaves
+   them behind in `CTF\SortOrder\AssemblyItem` and `CTF\Assemblies`.
+10. Optionally, language sync off.
 
 If `Set-WinUILanguageOverride` fails right after a language pack was installed (because the pack is
 active only after a restart), `PreferredUILanguages` is written directly and a warning is logged.
@@ -244,6 +250,8 @@ If anything is BLOCKED, Apply changes **nothing**. "Apply only the parts that ar
 | 3 | RDP/Citrix injects the client's layout. | `HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layout\IgnoreRemoteKeyboardLayout = 1` (option, on by default). |
 | 4 | Settings sync restores old lists. | `...\SettingSync\Groups\Language\Enabled = 0` per target (option, on by default). |
 | 5 | Hidden Preload entries. | Preload/Substitutes are rewritten in every target. Status lists hidden entries (Preload entries mapped through Substitutes that are not in the list). |
+| 5a | Windows' backup of the language list (`User Profile System Backup`) keeps old keyboards. The registry diff showed the US keyboard still there after `Set-WinUserLanguageList`, and Windows can restore the list from that backup. | The backup is rewritten to equal the new list in every target. Status and `-Verify` report a stale backup. |
+| 5b | Text-input entries of removed languages (`CTF\SortOrder`, `CTF\Assemblies`). The diff showed en-GB with a German keyboard left behind, and Microsoft's own "copy to welcome screen" spread it to the lock screen. | Removed in every target. Status and `-Verify` report leftovers. |
 | 6 | GPO/Intune policies. | Detected, reported and BLOCKED, never fought. |
 | 7 | PowerShell traps. | All registry writes use the .NET API, never `New-Item -Force`. `reg.exe` and `icacls.exe` run through a wrapper with a local `$ErrorActionPreference='Continue'` that checks `$LASTEXITCODE`. |
 | 8 | Hive handling. | `[gc]::Collect()` and `WaitForPendingFinalizers()` before unloading, unload in `finally` with retries. Loaded hives are used in place. Stale mounts from a crashed run are unloaded at start. The GUI cannot be closed while a hive may be loaded. |
@@ -264,11 +272,14 @@ Before any change, every key below is exported **per target** to `%ProgramData%\
 | `Control Panel\Desktop` | **Only** `PreferredUILanguages`, `PreferredUILanguagesPending`, `PreviousPreferredUILanguages` | Listed values replaced. Wallpaper and other values are untouched. |
 | `Control Panel\Desktop\MuiCached` | `MachinePreferredUILanguages` | Whole key replaced |
 | `Keyboard Layout\Preload` | `1..n` | Deleted, recreated, values written |
-| `Keyboard Layout\Substitutes` | `d0NNLLLL -> layout` | Deleted, recreated, values written |
+| `Keyboard Layout\Substitutes` | `<Preload value> -> layout` | Deleted, recreated, values written |
+| `Software\Microsoft\CTF\SortOrder` | Text-input order per language (`AssemblyItem\0x<langid>`, `Language`) | Other languages removed (signed-in users, .DEFAULT); whole key replaced (copies) |
+| `Software\Microsoft\CTF\Assemblies` | Default input profile per language | Same as above |
 | `Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language` | `Enabled = 0` | Value set (option; not in .DEFAULT, S-1-5-19 or S-1-5-20) |
 
-In signed-in users and in `.DEFAULT`, these keys are written by the Windows cmdlets themselves plus
-the Preload rewrite. In all other hives they are an exact copy of `.DEFAULT` after the recipe.
+In signed-in users and in `.DEFAULT`, these keys are written by the Windows cmdlets themselves, plus
+the Preload rewrite, the backup sync and the CTF cleanup. In all other hives they are an exact copy
+of `.DEFAULT` after the recipe. If a key did not exist before, Restore removes it again.
 
 **Machine:**
 
@@ -292,18 +303,27 @@ the Preload rewrite. In all other hives they are an exact copy of `.DEFAULT` aft
 The Status tab and the scan briefly load the `NTUSER.DAT` of profiles that are not signed in
 (`reg load` / `reg unload`) to read them. They write nothing.
 
-**To be confirmed empirically** (the requirement to diff the registry in a test VM): the table above
-is what the tool writes, and it is defined in one place, `$script:LanguageKeySet`. What remains to be
-confirmed is whether Windows' recipe also writes keys *outside* this list that profiles which are not
-signed in would need. Candidates:
-- `Software\Microsoft\CTF\SortOrder` and `CTF\Assemblies` (the input profile order);
-- `Software\Microsoft\Windows\CurrentVersion\Internet Settings\International\AcceptLanguage`;
-- `Software\Microsoft\Input` (Windows 11).
+### Registry diff results (Windows 11 Enterprise 25H2, build 26200)
+Captured with `tools/Capture-RegistryDiff.ps1` on a real company device:
+- the recipe was run in the signed-in user;
+- the recipe was run as SYSTEM (lock screen);
+- Microsoft's `Copy-UserInternationalSettingsToSystem` was run from a different admin account.
 
-Run `tools/Capture-RegistryDiff.cmd` in a VM (scenarios Recipe, RecipeAsSystem and CopyToSystem, see
-phase 0 of the test plan) and send back the `*_diff.txt`, `*_keys.txt` and `*_transcript.txt` files from
-`C:\Users\Public\Documents\LanguageProfile-Diff`. Any key that has
-to be added goes into `$script:LanguageKeySet` and this table.
+The language-related part of the data is kept in `tests/fixtures/win11-25h2-registry.json`. The
+engine tests run the tool's logic against it.
+
+| What Windows wrote | Consequence for the tool |
+|---|---|
+| `Control Panel\International` values, `User Profile` (incl. new values `WindowsOverride` = display language, `InputMethodOverride`), `Geo`, `Keyboard Layout\Preload`/`Substitutes` | Already in the key set. The display language is now read from `WindowsOverride` first. |
+| `Control Panel\Desktop\PreferredUILanguagesPending` (not `PreferredUILanguages`) | Already in the key set; becomes active at the next sign-in. |
+| `Software\Microsoft\CTF\SortOrder` and `CTF\Assemblies` (recipe and Microsoft's copy) | **Added** to the key set, plus cleanup of other languages. |
+| `User Profile System Backup`: **not updated**, still the old list with the US keyboard | **New step:** the backup is rewritten. |
+| Caches that Windows rebuilds itself: `Software\Classes\Local Settings\MuiCache`, `Spelling\Spellers`, `TabletTip\1.7`, `CloudStore` (settings sync cache), `Internet Explorer\International\AcceptLanguage` | Not copied to profiles that are not signed in. Windows creates or updates them when the account next changes its language list. |
+| `Set-SystemPreferredUILanguage` (already en-US) | No change. |
+| Microsoft's copy wrote only `.DEFAULT`, and only from the *running* account: here the admin's old list (en-CH plus the US keyboard) | Confirms decision (b). Copying from the elevated account would have put the admin's leftovers on the lock screen. |
+
+The diff tool is still available for other Windows builds. Double-click `tools/Capture-RegistryDiff.cmd`;
+the results go to `C:\Users\Public\Documents\LanguageProfile-Diff`.
 
 ## Backups, Restore, logs
 - Backups go to `%ProgramData%\LanguageProfile\Backups\<timestamp>_apply\`: `manifest.json` plus one `.reg` file per key and target.
@@ -323,10 +343,11 @@ to be added goes into `$script:LanguageKeySet` and this table.
 - While an offline profile's hive is loaded, which takes a few seconds, that user cannot sign in.
 - On Windows 10 it is not documented whether the `LanguagePackManagement` module (`Install-Language`) is present. The tool checks at runtime and shows the manual steps if it is not.
 - If an execution policy is enforced by GPO (`AllSigned`), `LanguageProfile.ps1` itself won't start: sign it. The per-user worker is unaffected (it is loaded as a script block).
-- `Set-WinUserLanguageList` and the other cmdlets running as SYSTEM in session 0 is the central assumption of the lock-screen path. It is phase 0 of the VM test plan.
+- The lock-screen path runs the International cmdlets as SYSTEM through a scheduled task. This was confirmed on Windows 11 25H2; Windows 10 22H2 is not tested yet.
 
 ## Development
 ```
 pwsh -File tests/Lint-PS51.ps1        # parse, PS 5.1 compatibility, ASCII-only, XAML names
-pwsh -File tests/Engine.Tests.ps1     # 75 unit tests of the engine (no registry access)
+pwsh -File tests/Engine.Tests.ps1     # 102 engine tests; registry logic runs against a fake registry
+                                      # loaded with real Windows 11 25H2 data (tests/fixtures)
 ```

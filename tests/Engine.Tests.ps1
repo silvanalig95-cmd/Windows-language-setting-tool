@@ -9,6 +9,47 @@
 param([string]$Path = (Join-Path $PSScriptRoot '..\LanguageProfile.ps1'))
 $ErrorActionPreference = 'Stop'
 
+# Minimal in-memory registry with the RegistryKey methods the engine uses (case-insensitive like the real one).
+class FakeNode {
+    [hashtable]$Values = @{}
+    [hashtable]$Kinds = @{}
+    [hashtable]$Subs = @{}
+}
+class FakeKey {
+    [FakeNode]$Node
+    FakeKey([FakeNode]$n) { $this.Node = $n }
+    hidden [FakeNode] Walk([string]$path, [bool]$create) {
+        $n = $this.Node
+        foreach ($part in $path.Split('\')) {
+            if ($part -eq '') { continue }
+            if (-not $n.Subs.ContainsKey($part)) {
+                if (-not $create) { return $null }
+                $n.Subs[$part] = [FakeNode]::new()
+            }
+            $n = $n.Subs[$part]
+        }
+        return $n
+    }
+    [object] OpenSubKey([string]$p) { return $this.OpenSubKey($p, $false) }
+    [object] OpenSubKey([string]$p, [bool]$w) { $n = $this.Walk($p, $false); if ($null -eq $n) { return $null }; return [FakeKey]::new($n) }
+    [object] CreateSubKey([string]$p) { return [FakeKey]::new($this.Walk($p, $true)) }
+    [string[]] GetValueNames() { return [string[]]@($this.Node.Values.Keys) }
+    [string[]] GetSubKeyNames() { return [string[]]@($this.Node.Subs.Keys) }
+    [object] GetValue([string]$n) { return $this.GetValue($n, $null) }
+    [object] GetValue([string]$n, [object]$d) { if ($this.Node.Values.ContainsKey($n)) { return $this.Node.Values[$n] }; return $d }
+    [object] GetValue([string]$n, [object]$d, [object]$o) { return $this.GetValue($n, $d) }
+    [object] GetValueKind([string]$n) { return [Microsoft.Win32.RegistryValueKind]$this.Node.Kinds[$n] }
+    [void] SetValue([string]$n, [object]$v, [object]$k) { $this.Node.Values[$n] = $v; $this.Node.Kinds[$n] = [string]$k }
+    [void] DeleteValue([string]$n, [bool]$t) { $this.Node.Values.Remove($n); $this.Node.Kinds.Remove($n) }
+    [void] DeleteSubKeyTree([string]$p, [bool]$t) {
+        $parts = @($p.Split('\') | Where-Object { $_ })
+        $n = $this.Node
+        for ($i = 0; $i -lt $parts.Count - 1; $i++) { if (-not $n.Subs.ContainsKey($parts[$i])) { return }; $n = $n.Subs[$parts[$i]] }
+        $n.Subs.Remove($parts[$parts.Count - 1])
+    }
+    [void] Close() { }
+}
+
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $Path), [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "Parse errors in $Path" }
@@ -244,7 +285,10 @@ $cat = @(Get-LPDisplayLanguageCatalog)
 Assert ($cat.Count -ge 100 -and @($cat | Where-Object { $_.Type -eq 'LP' }).Count -eq 38) "display language catalog: $($cat.Count) entries, 38 full packs"
 Assert (@($cat | Group-Object Tag | Where-Object { $_.Count -gt 1 }).Count -eq 0) 'no duplicate tags'
 $wt = Get-LPWorkerScriptText
-Assert ($wt -match 'function Get-LPPreloadPlan' -and $wt -match 'function ConvertFrom-LPTip' -and $wt -notmatch '#__LP_HELPERS__') 'worker contains the helper functions'
+Assert ($wt -match 'function Get-LPPreloadPlan' -and $wt -match 'function ConvertFrom-LPTip' -and $wt -match 'function Sync-LPLanguageBackup' -and $wt -match 'function Clear-LPCtfLeftovers' -and $wt -match 'function Read-LPRegTree' -and $wt -notmatch '#__LP_HELPERS__') 'worker contains the helper functions'
+$wcalls = @([System.Management.Automation.Language.Parser]::ParseInput($wt, [ref]$null, [ref]$null).FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() } | Where-Object { $_ -like '*-LP*' } | Select-Object -Unique)
+$wdefs = @([regex]::Matches($wt, '(?m)^function ([\w-]+)') | ForEach-Object { $_.Groups[1].Value })
+Assert (@($wcalls | Where-Object { $wdefs -notcontains $_ }).Count -eq 0) ('every engine function the worker calls is inside the worker (missing: ' + (@($wcalls | Where-Object { $wdefs -notcontains $_ }) -join ', ') + ')')
 $we = $null; $wtok = $null
 [void][System.Management.Automation.Language.Parser]::ParseInput($wt, [ref]$wtok, [ref]$we)
 Assert (@($we).Count -eq 0) 'generated worker parses'
@@ -258,6 +302,99 @@ $m = New-Module -ScriptBlock {
     function Invoke-Outer { $local = 'seen'; Invoke-Inner -Action { param($a) "$a-$local" } }
 }
 Assert ((& $m { Invoke-Outer }) -eq 'x-seen') 'module scriptblock sees caller locals (Use-LPHive pattern)'
+
+# ------------------------------------------------------------------------------------------------
+Write-Host 'Real registry data (Windows 11 25H2, tests/fixtures) in a fake registry'
+$fx = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'fixtures\win11-25h2-registry.json')) | ConvertFrom-Json
+function New-FakeHive($Entries) {
+    $root = [FakeKey]::new([FakeNode]::new())
+    foreach ($e in @($Entries)) {
+        $k = $root.CreateSubKey([string]$e.p)
+        if (-not $e.PSObject.Properties['k']) { continue }
+        switch ([string]$e.k) {
+            'DWord' { $d = [int]$e.d }
+            'QWord' { $d = [long]$e.d }
+            'MultiString' { $d = [string[]]@($e.d) }
+            'Binary' { $d = [Convert]::FromBase64String([string]$e.d) }
+            default { $d = [string]$e.d }
+        }
+        $k.SetValue([string]$e.n, $d, [string]$e.k)
+    }
+    return $root
+}
+function Get-FakeDump($Key, [string]$Prefix = '') {
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($n in ($Key.GetValueNames() | Sort-Object)) { $v = $Key.GetValue($n); if ($v -is [array]) { $v = ($v -join ';') }; $lines.Add("$Prefix | $n | $($Key.Node.Kinds[$n]) | $v") }
+    foreach ($s in ($Key.GetSubKeyNames() | Sort-Object)) { $lines.Add("$Prefix\$s\"); foreach ($l in (Get-FakeDump $Key.OpenSubKey($s) "$Prefix\$s")) { $lines.Add($l) } }
+    return $lines.ToArray()
+}
+$layouts = (New-FakeSnapshot).KeyboardLayouts
+$en = [int]0x409
+
+# The user's state before: en-CH (no LCID -> transient 0x2000) with Swiss German, en-US display, US keyboard in the backup
+$h = New-FakeHive $fx.userBefore
+$st = Get-LPHiveState -Base $h -Root '' -Layouts $layouts
+Assert ((Eq $st.Languages @('en-CH')) -and $st.LangIds['en-CH'] -eq 0x2000) 'real data: en-CH uses transient language ID 0x2000'
+Assert (Eq $st.Tips @('2000:00000807')) 'real data: Swiss German on en-CH = 2000:00000807'
+Assert ((Eq $st.PreloadTips @('2000:00000807')) -and @($st.Hidden).Count -eq 0) 'real data: Preload 00002000 + Substitute -> 00000807 resolved'
+Assert ((Eq $st.BackupLanguages @('en-US')) -and (Eq $st.BackupTips @('0409:00000409'))) 'real data: backup still holds en-US with the US keyboard'
+Assert ((@($st.CtfForeignLangIds) -contains 0x809) -and (@($st.CtfForeignLangIds) -contains 0x409)) 'real data: CTF leftovers for en-GB (0x809) and en-US detected'
+$risks = @(Get-LPRisks -State $st -Kind 'User' -SystemUILanguage 'en-US' -Layouts $layouts)
+Assert (@($risks | Where-Object { $_ -like '*re-adds it WITH ITS DEFAULT KEYBOARD*' }).Count -eq 1) 'real data: en-US display not in list -> re-add risk'
+Assert (@($risks | Where-Object { $_ -like "Windows' backup of the language list*US*" }).Count -eq 1) 'real data: backup with US keyboard -> risk'
+Assert (@($risks | Where-Object { $_ -like 'Text input settings (CTF)*en-GB*' }).Count -eq 1) 'real data: CTF leftover en-GB -> risk'
+
+$std = New-LPSelection -DisplayLanguage 'en-US' -RegionalFormat 'de-CH' -GeoId 223 -Keyboards @('00000807') -TargetIds @('lockscreen', 'newusers')
+
+# What Windows' recipe alone leaves behind in the user's hive, then the tool's extra cleanup
+$h = New-FakeHive $fx.userAfterRecipe
+$st = Get-LPHiveState -Base $h -Root '' -Layouts $layouts
+Assert ($st.UILanguage -eq 'en-US' -and $st.UILanguageOverride -eq 'en-US') 'real data: display language read from User Profile\WindowsOverride'
+Assert ((Eq $st.Preload @('00000409')) -and $st.Substitutes['00000409'] -eq '00000807' -and (Eq $st.PreloadTips @('0409:00000807'))) 'real data: Windows writes Preload 00000409 + Substitute 00000409 -> 00000807'
+$iss = @(Test-LPStateCompliance -State $st -Selection $std -Kind 'User')
+Assert ((@($iss | Where-Object { $_ -like 'language list backup*' }).Count -eq 1) -and (@($iss | Where-Object { $_ -like 'text input (CTF)*' }).Count -eq 1) -and $iss.Count -eq 2) "real data: after Windows' recipe only backup + CTF differ ($($iss -join ' / '))"
+$pp = Get-LPPreloadPlan -DesiredTips $std.Tips -Preload $st.Preload -Substitutes $st.Substitutes
+Assert ((Eq $pp.Preload @('00000409')) -and $pp.Substitutes['00000409'] -eq '00000807' -and @($pp.Removed).Count -eq 0) "Preload cleanup keeps Windows' own entry"
+$removed = @(Clear-LPCtfLeftovers -Base $h -Root '' -LangIds @($en))
+Assert ((@($removed | Where-Object { $_ -like '*AssemblyItem\0x00000809' }).Count -eq 1) -and (@($removed | Where-Object { $_ -like '*AssemblyItem\0x00002000' }).Count -eq 1)) 'CTF cleanup removes en-GB and the old en-CH entries'
+Assert (Sync-LPLanguageBackup -Base $h -Root '') 'backup sync ran'
+$st = Get-LPHiveState -Base $h -Root '' -Layouts $layouts
+Assert (@(Test-LPStateCompliance -State $st -Selection $std -Kind 'User').Count -eq 0) 'real data: user compliant after recipe + backup sync + CTF cleanup'
+Assert (-not $h.OpenSubKey('Control Panel\International\User Profile System Backup').GetValue('WindowsOverride')) 'backup does not get the override values'
+Assert (@(Clear-LPCtfLeftovers -Base $h -Root '' -LangIds @($en)).Count -eq 0) 'CTF cleanup is idempotent'
+
+# Lock screen: SYSTEM recipe result -> cleanup -> reference -> copied into the real Default profile
+$lock = New-FakeHive $fx.lockAfterSystemRecipe
+$st = Get-LPHiveState -Base $lock -Root '' -Layouts $layouts
+Assert ((Eq $st.BackupLanguages @('en-CH', 'en-US')) -and (@($st.BackupTips) -contains '0409:00000409')) "real data: lock screen backup still has en-CH + US keyboard after Windows' recipe"
+$null = Clear-LPCtfLeftovers -Base $lock -Root '' -LangIds @($en)
+$null = Sync-LPLanguageBackup -Base $lock -Root ''
+$st = Get-LPHiveState -Base $lock -Root '' -Layouts $layouts
+Assert (@(Test-LPStateCompliance -State $st -Selection $std -Kind 'LockScreen' -SystemUILanguage 'en-US').Count -eq 0) 'real data: lock screen reference compliant'
+$reference = @(Get-LPLanguageKeySet | ForEach-Object { Get-LPKeySnapshot -Base $lock -Root '' -Spec $_ })
+
+$def = New-FakeHive $fx.defaultProfileBefore
+$defBefore = Get-FakeDump $def
+$snapJson = @((@(Get-LPLanguageKeySet) + @(Get-LPSyncKeySpec)) | ForEach-Object { Get-LPKeySnapshot -Base $def -Root '' -Spec $_ }) | ConvertTo-Json -Depth 40
+$st = Get-LPHiveState -Base $def -Root '' -Layouts $layouts
+Assert ((@($st.CtfForeignLangIds) -contains 0x809) -and (Eq $st.PreloadTips @('0409:00000807', '0409:00000409'))) 'real data: Default profile has en-GB CTF leftover and the US keyboard'
+Copy-LPReferenceToHive -Base $def -Root '' -Reference $reference -DisableSync $true
+$st = Get-LPHiveState -Base $def -Root '' -Layouts $layouts
+Assert (@(Test-LPStateCompliance -State $st -Selection $std -Kind 'NewUsers').Count -eq 0) "real data: Default profile compliant after the copy ($(@(Test-LPStateCompliance -State $st -Selection $std -Kind 'NewUsers') -join ' / '))"
+Assert ($def.OpenSubKey('Control Panel\Desktop').GetValue('WallPaper') -eq 'C:\Windows\Web\Wallpaper\Windows\img0.jpg') 'copy leaves other Control Panel\Desktop values alone'
+Assert (Eq ($def.OpenSubKey('Control Panel\Desktop').GetValue('PreferredUILanguagesPending')) @('en-US')) 'copy sets the pending display language'
+$intlSubs = @($def.OpenSubKey('Control Panel\International').GetSubKeyNames())
+Assert ((@($intlSubs | Where-Object { $_ -match '^[^\x00-\x7F]+$' }).Count -eq 1)) 'copy leaves the calendar subkey of International alone'
+
+# Restore from the JSON manifest form brings the Default profile back exactly
+$snaps = @($snapJson | ConvertFrom-Json)
+foreach ($sn in $snaps) { Set-LPKeyFromSnapshot -Base $def -Root '' -Snapshot $sn }
+$defAfter = Get-FakeDump $def
+$diff = @(Compare-Object $defBefore $defAfter)
+$diff | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_.SideIndicator + " " + $_.InputObject) }
+Assert ($diff.Count -eq 0) "restore from manifest JSON is exact ($($diff.Count) differences)"
+$lines = Get-LPStateLines -State (Get-LPHiveState -Base (New-FakeHive $fx.userBefore) -Root '' -Layouts $layouts) -Layouts $layouts -SystemUILanguage 'en-US'
+Assert (@($lines | Where-Object { $_.Text -like 'List backup:*US*' }).Count -eq 1 -and @($lines | Where-Object { $_.Text -like 'Text input (CTF):*en-GB*' }).Count -eq 1) 'status shows the backup and CTF entries'
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail) -ForegroundColor $(if ($script:fail) { 'Red' } else { 'Green' })

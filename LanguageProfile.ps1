@@ -140,7 +140,9 @@ $LPEngineScript = {
     #   Tree   = the whole key incl. subkeys is replaced
     #   Values = all values of the key are replaced, subkeys are left alone
     #   Value  = only the listed values are replaced (absent in the source = deleted in the target)
-    # Keep this table in sync with README.md ("Registry keys touched") and the registry diff.
+    # Keep this table in sync with README.md ("Registry keys touched"). Confirmed by the registry diff on
+    # Windows 11 25H2 (build 26200): the recipe and Microsoft's own copy write exactly these keys (plus
+    # caches that Windows rebuilds itself: MuiCache, Spelling, TabletTip, CloudStore, IE AcceptLanguage).
     $script:LanguageKeySet = @(
         [pscustomobject]@{ Id = 'International';     Path = 'Control Panel\International';                             Mode = 'Values'; Names = $null }
         [pscustomobject]@{ Id = 'UserProfile';       Path = 'Control Panel\International\User Profile';                Mode = 'Tree';   Names = $null }
@@ -150,6 +152,8 @@ $LPEngineScript = {
         [pscustomobject]@{ Id = 'MuiCached';         Path = 'Control Panel\Desktop\MuiCached';                         Mode = 'Tree';   Names = $null }
         [pscustomobject]@{ Id = 'Preload';           Path = 'Keyboard Layout\Preload';                                 Mode = 'Tree';   Names = $null }
         [pscustomobject]@{ Id = 'Substitutes';       Path = 'Keyboard Layout\Substitutes';                             Mode = 'Tree';   Names = $null }
+        [pscustomobject]@{ Id = 'CtfSortOrder';      Path = 'Software\Microsoft\CTF\SortOrder';                         Mode = 'Tree';   Names = $null }
+        [pscustomobject]@{ Id = 'CtfAssemblies';     Path = 'Software\Microsoft\CTF\Assemblies';                        Mode = 'Tree';   Names = $null }
     )
     $script:SyncKeySpec = [pscustomobject]@{ Id = 'LanguageSync'; Path = 'Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language'; Mode = 'Value'; Names = @('Enabled') }
     $script:RemoteKbSpec = [pscustomobject]@{ Id = 'IgnoreRemoteKeyboardLayout'; Path = 'SYSTEM\CurrentControlSet\Control\Keyboard Layout'; Mode = 'Value'; Names = @('IgnoreRemoteKeyboardLayout') }
@@ -341,6 +345,8 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
     function Get-LPDataRoot { return $script:DataRoot }
     function Get-LPVersion { return $script:LPVersion }
     function Get-LPExitCodes { return $script:ExitCodes }
+    function Get-LPLanguageKeySet { return $script:LanguageKeySet }
+    function Get-LPSyncKeySpec { return $script:SyncKeySpec }
 
     function Write-LPLog {
         param(
@@ -472,8 +478,9 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             $p = ConvertFrom-LPTip $tip
             $langLower = $p.Lang.ToLowerInvariant()
             $val = $null
-            if ($p.Layout -eq ('0000' + $p.Lang)) {
-                $val = $p.Layout.ToLowerInvariant()
+            $plain = ('0000' + $p.Lang).ToLowerInvariant()
+            if ($p.Layout -eq ('0000' + $p.Lang) -and -not $used.ContainsKey($plain)) {
+                $val = $plain
             }
             else {
                 foreach ($k in @($subs.Keys | Sort-Object)) {
@@ -833,10 +840,16 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
     function Get-LPKeySnapshot {
         param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][AllowEmptyString()][string]$Root, [Parameter(Mandatory)]$Spec)
         $path = Join-LPRegPath $Root $Spec.Path
-        $snap = [pscustomobject]@{ Id = $Spec.Id; Path = $Spec.Path; Mode = $Spec.Mode; Names = $Spec.Names; Exists = $false; Values = @(); SubKeys = @() }
+        $snap = [pscustomobject]@{ Id = $Spec.Id; Path = $Spec.Path; Mode = $Spec.Mode; Names = $Spec.Names; Exists = $false; MissingFrom = $null; Values = @(); SubKeys = @() }
         $k = $null
         try { $k = $Base.OpenSubKey($path, $false) } catch { throw "Cannot read $path : $($_.Exception.Message)" }
         if (-not $k) {
+            # Topmost key of the path that did not exist, so Restore can remove keys the tool created.
+            $acc = ''
+            foreach ($part in $Spec.Path.Split('\')) {
+                if ($acc) { $acc = "$acc\$part" } else { $acc = $part }
+                if (-not (Test-LPRegKey $Base (Join-LPRegPath $Root $acc))) { $snap.MissingFrom = $acc; break }
+            }
             if ($Spec.Mode -eq 'Value') {
                 $snap.Values = @(foreach ($n in $Spec.Names) { [pscustomobject]@{ Name = $n; Kind = 'String'; Data = $null; Present = $false } })
             }
@@ -901,6 +914,30 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                 }
             }
             default { throw "Unknown snapshot mode '$($Snapshot.Mode)'" }
+        }
+        if (-not $Snapshot.Exists -and $Snapshot.PSObject.Properties['MissingFrom'] -and $Snapshot.MissingFrom) {
+            Remove-LPEmptyKeyChain -Base $Base -Root $Root -Path ([string]$Snapshot.Path) -Top ([string]$Snapshot.MissingFrom)
+        }
+    }
+
+    # Deletes $Path and its parents up to $Top (relative to $Root) as long as they are empty.
+    function Remove-LPEmptyKeyChain {
+        param([Parameter(Mandatory)]$Base, [AllowEmptyString()][string]$Root, [string]$Path, [string]$Top)
+        $rel = $Path
+        while ($rel) {
+            $full = Join-LPRegPath $Root $rel
+            $k = $null
+            try { $k = $Base.OpenSubKey($full, $false) } catch { }
+            if ($k) {
+                $empty = (@($k.GetValueNames()).Count -eq 0 -and @($k.GetSubKeyNames()).Count -eq 0)
+                $k.Close()
+                if (-not $empty) { break }
+                $Base.DeleteSubKeyTree($full, $false)
+            }
+            if ($rel -eq $Top) { break }
+            $i = $rel.LastIndexOf('\')
+            if ($i -lt 0) { break }
+            $rel = $rel.Substring(0, $i)
         }
     }
 
@@ -996,20 +1033,22 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
     }
 
     # --------------------------------------------------------------------------------------------
-    # Reading the language state of one hive (signed-in user, offline profile, .DEFAULT, Default)
+    # Language lists and text-services entries
     # --------------------------------------------------------------------------------------------
-    function Get-LPHiveState {
-        param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][AllowEmptyString()][string]$Root, $Layouts)
-        $up = Join-LPRegPath $Root 'Control Panel\International\User Profile'
+    # Reads a language list key ("User Profile" or "User Profile System Backup").
+    function Read-LPLanguageList {
+        param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][string]$Path)
         $langs = @()
-        $v = Get-LPRegValue $Base $up 'Languages'
+        $v = Get-LPRegValue $Base $Path 'Languages'
         if ($null -ne $v) { $langs = @($v | Where-Object { $_ }) }
         $langTips = [ordered]@{}
+        $langIds = @{}
         $allTips = New-Object System.Collections.Generic.List[string]
         foreach ($l in $langs) {
             $lk = $null
-            try { $lk = $Base.OpenSubKey((Join-LPRegPath $up $l), $false) } catch { }
+            try { $lk = $Base.OpenSubKey((Join-LPRegPath $Path $l), $false) } catch { }
             $pairs = @()
+            $transient = $null
             if ($lk) {
                 try {
                     $pairs = @(foreach ($n in $lk.GetValueNames()) {
@@ -1019,23 +1058,81 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                                 [pscustomobject]@{ Tip = (ConvertFrom-LPTip $n).Tip; Order = $order }
                             }
                         })
+                    $tl = $lk.GetValue('TransientLangId')
+                    if ($null -ne $tl) { $transient = [int]$tl }
                 }
                 finally { $lk.Close() }
             }
             $tips = @($pairs | Sort-Object Order | ForEach-Object { $_.Tip })
             $langTips[$l] = $tips
             foreach ($t in $tips) { if (-not $allTips.Contains($t)) { $allTips.Add($t) } }
+            # Language ID used by keyboard layouts and text services: transient ID (0x2000...) for languages without LCID.
+            if ($null -ne $transient) { $langIds[$l] = $transient } else { $id = Get-LPLcid $l; if ($id -gt 0 -and $id -ne 4096) { $langIds[$l] = $id } }
         }
+        return [pscustomobject]@{ Exists = (Test-LPRegKey $Base $Path); Languages = $langs; LanguageTips = $langTips; Tips = $allTips.ToArray(); LangIds = $langIds }
+    }
+
+    function ConvertFrom-LPLangIdName {
+        param([string]$Name)
+        if ($null -eq $Name) { return $null }
+        $t = $Name.Trim()
+        if ($t -match '^0x([0-9A-Fa-f]{1,8})$') { return [Convert]::ToInt32($Matches[1], 16) }
+        if ($t -match '^[0-9A-Fa-f]{8}$') { return [Convert]::ToInt32($t, 16) }
+        return $null
+    }
+
+    # Language IDs that Text Services Framework still has entries for (CTF\SortOrder\AssemblyItem, CTF\Assemblies).
+    function Get-LPCtfLangIds {
+        param([Parameter(Mandatory)]$Base, [AllowEmptyString()][string]$Root)
+        $ids = New-Object System.Collections.Generic.List[int]
+        foreach ($rel in 'Software\Microsoft\CTF\SortOrder\AssemblyItem', 'Software\Microsoft\CTF\Assemblies') {
+            foreach ($n in (Get-LPRegSubKeyNames $Base (Join-LPRegPath $Root $rel))) {
+                $id = ConvertFrom-LPLangIdName $n
+                if ($null -ne $id -and -not $ids.Contains($id)) { $ids.Add($id) }
+            }
+        }
+        $lp = Join-LPRegPath $Root 'Software\Microsoft\CTF\SortOrder\Language'
+        foreach ($n in (Get-LPRegValueNames $Base $lp)) {
+            $id = ConvertFrom-LPLangIdName ([string](Get-LPRegValue $Base $lp $n))
+            if ($null -ne $id -and -not $ids.Contains($id)) { $ids.Add($id) }
+        }
+        return $ids.ToArray()
+    }
+
+    function Get-LPLangIdDisplay {
+        param([int]$LangId)
+        $name = $null
+        if ($LangId -ge 0x2000 -and $LangId -le 0x2C00 -and ($LangId % 0x400) -eq 0) { return ('0x{0:X4} (language without its own ID)' -f $LangId) }
+        try { $name = ([Globalization.CultureInfo]::GetCultureInfo($LangId)).Name } catch { }
+        if ($name) { return ('{0} (0x{1:X4})' -f $name, $LangId) }
+        return ('0x{0:X4}' -f $LangId)
+    }
+
+    # --------------------------------------------------------------------------------------------
+    # Reading the language state of one hive (signed-in user, offline profile, .DEFAULT, Default)
+    # --------------------------------------------------------------------------------------------
+    function Get-LPHiveState {
+        param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][AllowEmptyString()][string]$Root, $Layouts)
+        $up = Join-LPRegPath $Root 'Control Panel\International\User Profile'
+        $list = Read-LPLanguageList -Base $Base -Path $up
+        $backup = Read-LPLanguageList -Base $Base -Path (Join-LPRegPath $Root 'Control Panel\International\User Profile System Backup')
         $imo = Get-LPRegValue $Base $up 'InputMethodOverride'
-        $ui = $null
-        $v = Get-LPRegValue $Base (Join-LPRegPath $Root 'Control Panel\Desktop') 'PreferredUILanguages'
-        if ($null -ne $v) { $ui = @($v | Where-Object { $_ }) | Select-Object -First 1 }
+        $override = Get-LPRegValue $Base $up 'WindowsOverride'
+        $desktop = Join-LPRegPath $Root 'Control Panel\Desktop'
+        $preferred = $null
+        $v = Get-LPRegValue $Base $desktop 'PreferredUILanguages'
+        if ($null -ne $v) { $preferred = @($v | Where-Object { $_ }) | Select-Object -First 1 }
         $uiPending = $null
-        $v = Get-LPRegValue $Base (Join-LPRegPath $Root 'Control Panel\Desktop') 'PreferredUILanguagesPending'
+        $v = Get-LPRegValue $Base $desktop 'PreferredUILanguagesPending'
         if ($null -ne $v) { $uiPending = @($v | Where-Object { $_ }) | Select-Object -First 1 }
         $machineUi = $null
         $v = Get-LPRegValue $Base (Join-LPRegPath $Root 'Control Panel\Desktop\MuiCached') 'MachinePreferredUILanguages'
         if ($null -ne $v) { $machineUi = @($v | Where-Object { $_ }) | Select-Object -First 1 }
+        # Effective user display language: the override (Set-WinUILanguageOverride writes
+        # User Profile\WindowsOverride), else the pending value (active after sign-in), else the current one.
+        $ui = $override
+        if (-not $ui) { $ui = $uiPending }
+        if (-not $ui) { $ui = $preferred }
         $format = Get-LPRegValue $Base (Join-LPRegPath $Root 'Control Panel\International') 'LocaleName'
         $geo = Get-LPRegValue $Base (Join-LPRegPath $Root 'Control Panel\International\Geo') 'Nation'
         $geoId = 0
@@ -1048,16 +1145,23 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $subs = @{}
         $subPath = Join-LPRegPath $Root 'Keyboard Layout\Substitutes'
         foreach ($n in (Get-LPRegValueNames $Base $subPath)) { $subs[$n] = [string](Get-LPRegValue $Base $subPath $n) }
-        $pp = Get-LPPreloadPlan -DesiredTips $allTips.ToArray() -Preload $preloadVals -Substitutes $subs
+        $pp = Get-LPPreloadPlan -DesiredTips $list.Tips -Preload $preloadVals -Substitutes $subs
         $hidden = @($pp.Removed | ForEach-Object { if ($_.Valid) { $_.Tip } else { $_.Value } })
+
+        $listIds = @($list.LangIds.Values)
+        $ctfIds = @(Get-LPCtfLangIds -Base $Base -Root $Root)
+        $ctfForeign = @($ctfIds | Where-Object { $listIds -notcontains $_ })
 
         $sync = Get-LPRegValue $Base (Join-LPRegPath $Root $script:SyncKeySpec.Path) 'Enabled'
         return [pscustomobject]@{
-            Languages           = $langs
-            LanguageTips        = $langTips
-            Tips                = $allTips.ToArray()
+            Languages           = $list.Languages
+            LanguageTips        = $list.LanguageTips
+            Tips                = $list.Tips
+            LangIds             = $list.LangIds
             InputMethodOverride = $imo
             UILanguage          = $ui
+            UILanguageOverride  = $override
+            UILanguageCurrent   = $preferred
             UILanguagePending   = $uiPending
             MachineUILanguage   = $machineUi
             Format              = $format
@@ -1066,8 +1170,71 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             PreloadTips         = @($pp.Entries | ForEach-Object { if ($_.Valid) { $_.Tip } else { $_.Value } })
             Substitutes         = $subs
             Hidden              = $hidden
+            BackupExists        = $backup.Exists
+            BackupLanguages     = $backup.Languages
+            BackupTips          = $backup.Tips
+            CtfLangIds          = $ctfIds
+            CtfForeignLangIds   = $ctfForeign
             SyncEnabled         = $sync
         }
+    }
+
+    # Windows keeps a copy of the language list in "User Profile System Backup" and restores it in
+    # some situations. Set-WinUserLanguageList does not update it (registry diff on Windows 11 25H2:
+    # the backup still contained the US keyboard afterwards). Make it an exact copy of "User Profile",
+    # without the override values (Windows' own backups don't contain them).
+    function Sync-LPLanguageBackup {
+        param([Parameter(Mandatory)]$Base, [AllowEmptyString()][string]$Root = '')
+        $src = Join-LPRegPath $Root 'Control Panel\International\User Profile'
+        $dst = Join-LPRegPath $Root 'Control Panel\International\User Profile System Backup'
+        $k = $Base.OpenSubKey($src, $false)
+        if (-not $k) { return $false }
+        try { $tree = Read-LPRegTree -Key $k -Recurse } finally { $k.Close() }
+        $vals = @($tree.Values | Where-Object { $_.Name -ne 'InputMethodOverride' -and $_.Name -ne 'WindowsOverride' })
+        Remove-LPRegTree -Base $Base -Path $dst
+        $d = $Base.CreateSubKey($dst)
+        try { Write-LPRegTree -Key $d -Tree ([pscustomobject]@{ Values = $vals; SubKeys = $tree.SubKeys }) } finally { $d.Close() }
+        return $true
+    }
+
+    # Text Services Framework keeps per-language entries in CTF\SortOrder and CTF\Assemblies. Windows
+    # leaves entries of removed languages behind (registry diff: en-GB with a German keyboard), and
+    # Microsoft's own "copy to welcome screen" carries them along. Remove every language except $LangIds.
+    function Clear-LPCtfLeftovers {
+        param([Parameter(Mandatory)]$Base, [AllowEmptyString()][string]$Root = '', [Parameter(Mandatory)][int[]]$LangIds)
+        $removed = New-Object System.Collections.Generic.List[string]
+        foreach ($rel in 'Software\Microsoft\CTF\SortOrder\AssemblyItem', 'Software\Microsoft\CTF\Assemblies') {
+            $p = Join-LPRegPath $Root $rel
+            foreach ($n in @(Get-LPRegSubKeyNames $Base $p)) {
+                $id = ConvertFrom-LPLangIdName $n
+                if ($null -ne $id -and -not ($LangIds -contains $id)) {
+                    $Base.DeleteSubKeyTree((Join-LPRegPath $p $n), $false)
+                    $removed.Add("$rel\$n")
+                }
+            }
+        }
+        $lp = Join-LPRegPath $Root 'Software\Microsoft\CTF\SortOrder\Language'
+        if (Test-LPRegKey $Base $lp) {
+            $k = $Base.OpenSubKey($lp, $true)
+            try {
+                $names = @($k.GetValueNames() | Sort-Object)
+                $keep = New-Object System.Collections.Generic.List[string]
+                $changed = $false
+                foreach ($n in $names) {
+                    $v = [string]$k.GetValue($n)
+                    $id = ConvertFrom-LPLangIdName $v
+                    if ($null -ne $id -and ($LangIds -contains $id) -and -not $keep.Contains($v)) { $keep.Add($v) }
+                    else { $changed = $true; $removed.Add("SortOrder\Language\$n = $v") }
+                }
+                if ($changed) {
+                    foreach ($n in $names) { $k.DeleteValue($n, $false) }
+                    $i = 0
+                    foreach ($v in $keep) { $k.SetValue(('{0:D8}' -f $i), $v, [Microsoft.Win32.RegistryValueKind]::String); $i++ }
+                }
+            }
+            finally { $k.Close() }
+        }
+        return $removed.ToArray()
     }
 
     # --------------------------------------------------------------------------------------------
@@ -1600,14 +1767,14 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
 
         # 3. Windows version and capabilities
         if ($os) {
-            $tested = ($os.Build -eq 19045 -or $os.Build -eq 22631 -or $os.Build -eq 26100)
+            $tested = ($os.Build -eq 19045 -or $os.Build -eq 22631 -or $os.Build -eq 26100 -or $os.Build -eq 26200)
             $capText = @(
                 ('Install-Language: ' + $(if ($caps.InstallLanguage) { 'available' } else { 'not available (language packs must be added manually)' }))
                 ('Set-SystemPreferredUILanguage: ' + $(if ($caps.SetSystemPreferredUILanguage) { 'available' } else { 'not available (welcome-screen language comes from the lock-screen account settings only)' }))
                 'Lock screen and new users are written directly by this tool on every Windows version (README: "Lock screen and new users").'
             )
             if ($tested) { & $add 'windows' $os.Name 'OK' $capText $null $null }
-            else { & $add 'windows' ($os.Name + ' - not one of the tested versions (Windows 10 22H2, Windows 11 23H2/24H2)') 'Warn' $capText $null $null }
+            else { & $add 'windows' ($os.Name + ' - not one of the tested versions (Windows 10 22H2, Windows 11 23H2/24H2/25H2)') 'Warn' $capText $null $null }
         }
 
         # 4. Display language
@@ -1946,6 +2113,15 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if ([int]$State.GeoId -ne [int]$Selection.GeoId) { $issues.Add("country/region is $($State.GeoId), expected $($Selection.GeoId)") }
         if ((@($State.PreloadTips) -join ',') -ne (@($Selection.Tips) -join ',')) { $issues.Add('Preload is [' + (@($State.PreloadTips) -join ', ') + '], expected [' + (@($Selection.Tips) -join ', ') + ']') }
         if ($Selection.DisableSync -and $Kind -ne 'LockScreen' -and [string]$State.SyncEnabled -ne '0') { $issues.Add('language sync is not disabled') }
+        if ($State.PSObject.Properties['BackupLanguages']) {
+            $bl = @($State.BackupLanguages)
+            if ($State.BackupExists -and (($bl -join ',') -ne $Selection.DisplayLanguage -or (@($State.BackupTips | Sort-Object) -join ',') -ne (@($Selection.Tips | Sort-Object) -join ','))) {
+                $issues.Add('language list backup (User Profile System Backup) is [' + ($bl -join ', ') + ': ' + (@($State.BackupTips) -join ', ') + ']')
+            }
+            if (@($State.CtfForeignLangIds).Count -gt 0) {
+                $issues.Add('text input (CTF) still has entries for ' + (@($State.CtfForeignLangIds | ForEach-Object { Get-LPLangIdDisplay $_ }) -join ', '))
+            }
+        }
         return $issues.ToArray()
     }
 
@@ -2000,6 +2176,20 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if ($langs.Count -gt 1) {
             $r.Add('More than one language in the list: each one adds its own entry (e.g. a second "DEU") to the switcher.')
         }
+        if ($State.PSObject.Properties['BackupLanguages'] -and $State.BackupExists) {
+            $bl = @($State.BackupLanguages)
+            $extraTips = @($State.BackupTips | Where-Object { -not (@($State.Tips) -contains $_) })
+            $extraLangs = @($bl | Where-Object { -not ($langs -contains $_) })
+            if ($extraTips.Count -gt 0 -or $extraLangs.Count -gt 0) {
+                $what = @()
+                if ($extraLangs.Count) { $what += 'languages ' + ($extraLangs -join ', ') }
+                if ($extraTips.Count) { $what += 'keyboards ' + (@($extraTips | ForEach-Object { Get-LPTipDisplay $_ $Layouts }) -join '; ') }
+                $r.Add("Windows' backup of the language list (User Profile System Backup) still has " + ($what -join ' and ') + ' - Windows can restore it.')
+            }
+        }
+        if ($State.PSObject.Properties['CtfForeignLangIds'] -and @($State.CtfForeignLangIds).Count -gt 0) {
+            $r.Add('Text input settings (CTF) still have entries for languages that are not in the list: ' + (@($State.CtfForeignLangIds | ForEach-Object { Get-LPLangIdDisplay $_ }) -join ', '))
+        }
         return $r.ToArray()
     }
 
@@ -2011,11 +2201,18 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $uiText = $ui
         if (-not $ui) { $uiText = '(not set - uses system language {0})' -f $SystemUILanguage }
         if ($State.UILanguagePending) { $uiText += " (pending after sign-out: $($State.UILanguagePending))" }
+        if ($State.PSObject.Properties['UILanguageOverride'] -and $State.UILanguageOverride -and $State.UILanguageCurrent -and $State.UILanguageCurrent -ne $State.UILanguageOverride) { $uiText += " (currently $($State.UILanguageCurrent), changes at next sign-in)" }
         $lines.Add((New-LPLine 'Text' ('Display language:   ' + $uiText)))
         $lines.Add((New-LPLine 'Text' ('Regional format:    ' + $(if ($State.Format) { $State.Format } else { '(not set)' }))))
         $lines.Add((New-LPLine 'Text' ('Country/region:     ' + $(if ($State.GeoId) { '{0} ({1})' -f (Get-LPGeoName $State.GeoId), $State.GeoId } else { '(not set)' }))))
         $lines.Add((New-LPLine 'Text' ('Language list:      ' + (Get-LPLanguageListText $State $Layouts))))
         if ($State.InputMethodOverride) { $lines.Add((New-LPLine 'Text' ('Default keyboard:   ' + (Get-LPTipDisplay $State.InputMethodOverride $Layouts)))) }
+        if ($State.PSObject.Properties['BackupExists'] -and $State.BackupExists) {
+            $lines.Add((New-LPLine 'Text' ('List backup:        ' + (@($State.BackupLanguages) -join ', ') + ' [' + (@($State.BackupTips | ForEach-Object { $p = ConvertFrom-LPTip $_; if ($p) { Get-LPLayoutName $p.Layout $Layouts } else { $_ } }) -join ', ') + ']')))
+        }
+        if ($State.PSObject.Properties['CtfLangIds']) {
+            $lines.Add((New-LPLine 'Text' ('Text input (CTF):   ' + $(if (@($State.CtfLangIds).Count) { (@($State.CtfLangIds | ForEach-Object { Get-LPLangIdDisplay $_ }) -join ', ') } else { '(none)' }))))
+        }
         $pre = @($State.PreloadTips | ForEach-Object { Get-LPTipDisplay $_ $Layouts })
         $lines.Add((New-LPLine 'Text' ('Preload:            ' + $(if ($pre.Count) { $pre -join '; ' } else { '(empty)' }))))
         $syncText = '(not set - on if sync is used)'
@@ -2089,12 +2286,24 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $lines.Add((New-LPLine $(if ($curGeo -eq $Selection.GeoId) { 'Keep' } else { 'Set' }) ('Country/region: {0} ({1})' -f (Get-LPGeoName $Selection.GeoId), $Selection.GeoId)))
         if ($State) {
             foreach ($l in @($State.Languages)) {
-                if ($l -ne $disp) { $lines.Add((New-LPLine 'Remove' ("Language $l with " + (@($State.LanguageTips[$l] | ForEach-Object { Get-LPTipDisplay $_ $Layouts }) -join ', ')))) }
+                if ($l -ne $disp) {
+                    $kt = @($State.LanguageTips[$l] | ForEach-Object { Get-LPTipDisplay $_ $Layouts })
+                    $lines.Add((New-LPLine 'Remove' ("Language $l" + $(if ($kt.Count) { ' with ' + ($kt -join ', ') } else { ' (no keyboards)' }))))
+                }
                 else {
                     foreach ($t in @($State.LanguageTips[$l])) { if (-not (@($Selection.Tips) -contains $t)) { $lines.Add((New-LPLine 'Remove' ('Keyboard ' + (Get-LPTipDisplay $t $Layouts)))) } }
                 }
             }
             foreach ($h in @($State.Hidden)) { $lines.Add((New-LPLine 'Remove' ('Hidden layout ' + (Get-LPTipDisplay $h $Layouts) + ' (Keyboard Layout\Preload)'))) }
+            if ($State.PSObject.Properties['BackupExists'] -and $State.BackupExists) {
+                $oldTips = @($State.BackupTips | Where-Object { -not (@($Selection.Tips) -contains $_) })
+                $oldLangs = @($State.BackupLanguages | Where-Object { $_ -ne $disp })
+                if ($oldTips.Count -or $oldLangs.Count) {
+                    $lines.Add((New-LPLine 'Remove' ('From the list backup (User Profile System Backup): ' + ((@($oldLangs) + @($oldTips | ForEach-Object { Get-LPTipDisplay $_ $Layouts })) -join ', '))))
+                }
+            }
+            $ctfOld = @($State.CtfForeignLangIds | Where-Object { $_ -ne $Selection.DisplayLcid })
+            if ($ctfOld.Count) { $lines.Add((New-LPLine 'Remove' ('Text input (CTF) entries for ' + (@($ctfOld | ForEach-Object { Get-LPLangIdDisplay $_ }) -join ', ')))) }
         }
         if ($Selection.DisableSync -and $Kind -ne 'LockScreen') {
             if (-not $State -or [string]$State.SyncEnabled -ne '0') { $lines.Add((New-LPLine 'Set' 'Language settings sync: off')) }
@@ -2228,8 +2437,8 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
 
     # --------------------------------------------------------------------------------------------
     # Worker: runs INSIDE the target account (signed-in user, or SYSTEM for the lock screen) via a
-    # one-time scheduled task. It never runs in the elevated admin's context. The helper functions
-    # Get-LPPreloadPlan and ConvertFrom-LPTip are inserted at #__LP_HELPERS__.
+    # one-time scheduled task. It never runs in the elevated admin's context. Engine helper functions
+    # (Preload plan, registry tree copy, backup sync, CTF cleanup) are inserted at #__LP_HELPERS__.
     # --------------------------------------------------------------------------------------------
     $script:WorkerText = @'
 param([Parameter(Mandatory = $true)][string]$JobDir)
@@ -2254,6 +2463,8 @@ function Invoke-WorkerStep([string]$Name, [scriptblock]$Action) {
         throw
     }
 }
+
+function Write-LPLog([string]$Message, [string]$Level) { Write-WorkerLog $Message }
 
 #__LP_HELPERS__
 
@@ -2311,6 +2522,12 @@ try {
         $sk2 = $cu.CreateSubKey('Keyboard Layout\Substitutes')
         try { foreach ($k in @($plan.Substitutes.Keys)) { $sk2.SetValue([string]$k, [string]$plan.Substitutes[$k], [Microsoft.Win32.RegistryValueKind]::String) } } finally { $sk2.Close() }
     }
+    Invoke-WorkerStep 'Language list backup (User Profile System Backup)' {
+        if (Sync-LPLanguageBackup -Base ([Microsoft.Win32.Registry]::CurrentUser) -Root '') { Write-WorkerLog '  backup now equals the language list' }
+    }
+    Invoke-WorkerStep 'Text input leftovers (CTF)' {
+        foreach ($r in @(Clear-LPCtfLeftovers -Base ([Microsoft.Win32.Registry]::CurrentUser) -Root '' -LangIds @([int]$job.DisplayLcid))) { Write-WorkerLog "  removed $r" }
+    }
     if ($job.DisableSync) {
         Invoke-WorkerStep 'Language settings sync off' {
             $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language')
@@ -2338,7 +2555,8 @@ finally {
 '@
 
     function Get-LPWorkerScriptText {
-        $helpers = foreach ($fn in 'ConvertFrom-LPTip', 'Get-LPPreloadPlan') {
+        $helpers = foreach ($fn in 'ConvertFrom-LPTip', 'Get-LPPreloadPlan', 'Join-LPRegPath', 'Test-LPRegKey', 'Get-LPRegSubKeyNames', 'Read-LPRegTree',
+            'Write-LPRegValues', 'Write-LPRegTree', 'Remove-LPRegTree', 'ConvertFrom-LPLangIdName', 'Sync-LPLanguageBackup', 'Clear-LPCtfLeftovers') {
             "function $fn {`r`n" + (Get-Item -LiteralPath "function:$fn").ScriptBlock.ToString() + "`r`n}`r`n"
         }
         return $script:WorkerText.Replace('#__LP_HELPERS__', ($helpers -join "`r`n"))
@@ -2373,6 +2591,7 @@ finally {
             $job = [ordered]@{
                 ExpectedSid     = $Sid
                 DisplayLanguage = $Selection.DisplayLanguage
+                DisplayLcid     = [int]$Selection.DisplayLcid
                 RegionalFormat  = $Selection.RegionalFormat
                 GeoId           = [int]$Selection.GeoId
                 Tips            = @($Selection.Tips)
@@ -2676,7 +2895,7 @@ finally {
     # Apply
     # --------------------------------------------------------------------------------------------
     function Copy-LPReferenceToHive {
-        param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)]$Reference, [bool]$DisableSync)
+        param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][AllowEmptyString()][string]$Root, [Parameter(Mandatory)]$Reference, [bool]$DisableSync)
         foreach ($snap in $Reference) { Set-LPKeyFromSnapshot -Base $Base -Root $Root -Snapshot $snap }
         if ($DisableSync) { Set-LPRegDword -Base $Base -Path (Join-LPRegPath $Root $script:SyncKeySpec.Path) -Name 'Enabled' -Value 0 }
     }

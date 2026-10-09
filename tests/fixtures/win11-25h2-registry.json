@@ -1,0 +1,3461 @@
+{
+"source": "Windows 11 Enterprise 25H2 (build 26200), real company device, captured with tools/Capture-RegistryDiff.ps1 on 2026-10-09. Only language-related keys are kept.",
+"userBefore": [
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000000",
+"k": "String",
+"d": "00002000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134684672
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67569673
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67699721
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00002000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Default",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134684672
+},
+{
+"p": "Keyboard Layout"
+},
+{
+"p": "Keyboard Layout\\Toggle"
+},
+{
+"p": "Keyboard Layout\\Substitutes"
+},
+{
+"p": "Keyboard Layout\\Substitutes",
+"n": "00002000",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Keyboard Layout\\Preload"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "1",
+"k": "String",
+"d": "00002000"
+},
+{
+"p": "Control Panel\\International"
+},
+{
+"p": "Control Panel\\International",
+"n": "Locale",
+"k": "String",
+"d": "00000C00"
+},
+{
+"p": "Control Panel\\International",
+"n": "LocaleName",
+"k": "String",
+"d": "en-CH"
+},
+{
+"p": "Control Panel\\International",
+"n": "s1159",
+"k": "String",
+"d": "am"
+},
+{
+"p": "Control Panel\\International",
+"n": "s2359",
+"k": "String",
+"d": "pm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sCurrency",
+"k": "String",
+"d": "CHF"
+},
+{
+"p": "Control Panel\\International",
+"n": "sDate",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sDecimal",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLanguage",
+"k": "String",
+"d": "ZZZ"
+},
+{
+"p": "Control Panel\\International",
+"n": "sList",
+"k": "String",
+"d": ","
+},
+{
+"p": "Control Panel\\International",
+"n": "sLongDate",
+"k": "String",
+"d": "dddd, d MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonDecimalSep",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonThousandSep",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNativeDigits",
+"k": "String",
+"d": "0123456789"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNegativeSign",
+"k": "String",
+"d": "-"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortDate",
+"k": "String",
+"d": "dd.MM.yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sThousand",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTime",
+"k": "String",
+"d": ":"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTimeFormat",
+"k": "String",
+"d": "HH:mm:ss"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortTime",
+"k": "String",
+"d": "HH:mm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sYearMonth",
+"k": "String",
+"d": "MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCalendarType",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCountry",
+"k": "String",
+"d": "41"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrency",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDate",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "NumShape",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstDayOfWeek",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstWeekOfYear",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iMeasure",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegCurr",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegNumber",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iPaperSize",
+"k": "String",
+"d": "9"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTime",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTimePrefix",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d",
+"n": "Calendar",
+"k": "String",
+"d": "Gregorian"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-CH"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1893"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "TransientLangId",
+"k": "DWord",
+"d": 8192
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "2000:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable"
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableLanguagePacks",
+"k": "MultiString",
+"d": [
+"et-EE",
+"cs-cz",
+"zh-CN",
+"gu-in",
+"km-kh",
+"gl-ES",
+"as-in",
+"kk-kz",
+"en-us",
+"sl-SI",
+"ar-sa",
+"bn-in",
+"am-et",
+"ka-ge",
+"bg-bg",
+"de-de",
+"az-latn-az",
+"ur-pk",
+"mt-mt",
+"ro-RO",
+"hu-HU",
+"uz-latn-uz",
+"it-IT",
+"da-dk",
+"gd-gb",
+"el-gr",
+"eu-ES",
+"en-gb",
+"fr-CA",
+"ca-es",
+"te-in",
+"ml-in",
+"kn-in",
+"es-es",
+"fr-FR",
+"mk-mk",
+"pt-PT",
+"es-mx",
+"fi-FI",
+"ru-RU",
+"id-ID",
+"he-IL",
+"be-by",
+"af-za",
+"fa-ir",
+"chr-cher-us",
+"nl-NL",
+"hr-hr",
+"bs-latn-ba",
+"lt-LT",
+"mr-in",
+"uk-UA",
+"lv-lv",
+"or-in",
+"is-is",
+"pl-pl",
+"th-TH",
+"pt-BR",
+"ja-JP",
+"cy-gb",
+"ko-KR",
+"ug-cn",
+"nb-NO",
+"ca-es-valencia",
+"tr-TR",
+"sk-SK",
+"sr-LATN-RS",
+"sv-SE",
+"zh-TW",
+"vi-VN",
+"fil-ph",
+"ga-ie",
+"mi-nz",
+"pa-in",
+"lo-la",
+"hi-in",
+"lb-lu",
+"hy-am",
+"kok-in",
+"ms-my",
+"sr-cyrl-rs",
+"sq-al",
+"ne-np",
+"nn-no",
+"quz-pe",
+"sr-cyrl-ba",
+"ta-in",
+"tt-ru"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableSpeechFeatures",
+"k": "MultiString",
+"d": [
+"en-US",
+"fr-CA",
+"en-GB",
+"da-DK",
+"en-IN",
+"de-DE",
+"en-AU",
+"en-CA",
+"fr-FR",
+"es-ES",
+"es-MX",
+"it-IT",
+"ja-JP",
+"pt-BR",
+"zh-CN",
+"zh-HK",
+"zh-TW"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableHandwritingFeatures",
+"k": "MultiString",
+"d": [
+"nso-ZA",
+"as-IN",
+"gl-ES",
+"xh-ZA",
+"sl-SI",
+"en-US",
+"rw-RW",
+"bg-BG",
+"az-LATN-AZ",
+"de-DE",
+"be-BY",
+"af-ZA",
+"he-IL",
+"ar-EG",
+"bn-BD",
+"ga-IE",
+"bn-IN",
+"ta-IN",
+"br-FR",
+"hr-HR",
+"nl-NL",
+"bs-LATN-BA",
+"ca-ES",
+"en-GB",
+"co-FR",
+"el-GR",
+"kl-GL",
+"oc-FR",
+"rm-CH",
+"zh-CN",
+"cs-CZ",
+"cy-GB",
+"ja-JP",
+"da-DK",
+"gd-GB",
+"te-IN",
+"es-ES",
+"fr-FR",
+"kn-IN",
+"ms-BN",
+"tn-ZA",
+"es-MX",
+"et-EE",
+"eu-ES",
+"fi-FI",
+"fil-PH",
+"fj-FJ",
+"hi-IN",
+"mg-MG",
+"haw-US",
+"uz-LATN-UZ",
+"sw-KE",
+"hu-HU",
+"it-IT",
+"id-ID",
+"th-TH",
+"is-IS",
+"pl-PL",
+"pt-BR",
+"jv-LATN-ID",
+"ki-KE",
+"ko-KR",
+"lb-LU",
+"tk-TM",
+"lt-LT",
+"so-SO",
+"lv-LV",
+"mi-NZ",
+"ms-MY",
+"nb-NO",
+"nn-NO",
+"pt-PT",
+"quz-BO",
+"ro-RO",
+"ru-RU",
+"sco-LATN",
+"sk-SK",
+"sn-LATN",
+"sr-CYRL-RS",
+"sq-AL",
+"sr-LATN-RS",
+"sv-SE",
+"tr-TR",
+"uk-UA",
+"vi-VN",
+"wo-SN",
+"zh-HK",
+"zh-TW",
+"zu-ZA"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableTextToSpeechFeatures",
+"k": "MultiString",
+"d": [
+"zh-CN",
+"cs-CZ",
+"sl-SI",
+"en-US",
+"ar-SA",
+"ar-EG",
+"de-DE",
+"bg-BG",
+"de-CH",
+"da-DK",
+"fr-CA",
+"en-GB",
+"ca-ES",
+"fi-FI",
+"de-AT",
+"en-IN",
+"el-GR",
+"en-AU",
+"en-CA",
+"nl-BE",
+"en-IE",
+"fr-FR",
+"es-ES",
+"es-MX",
+"fr-CH",
+"he-IL",
+"hi-IN",
+"nl-NL",
+"hr-HR",
+"it-IT",
+"hu-HU",
+"id-ID",
+"ja-JP",
+"ko-KR",
+"ms-MY",
+"nb-NO",
+"th-TH",
+"pt-BR",
+"pl-PL",
+"pt-PT",
+"ro-RO",
+"ru-RU",
+"sk-SK",
+"sv-SE",
+"ta-IN",
+"tr-TR",
+"vi-VN",
+"zh-HK",
+"zh-TW"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableAdvancedSpeechFeatures",
+"k": "MultiString",
+"d": [
+"fr-CA",
+"en-GB",
+"es-MX",
+"da",
+"es-ES",
+"fr-FR",
+"en-IE",
+"en-CA",
+"zh-Hans-CN",
+"zh-Hant-HK",
+"pt-PT",
+"en-US",
+"en-NZ",
+"de-DE",
+"zh-Hant-TW",
+"en-AU",
+"pt-BR",
+"ko",
+"it-IT",
+"en-IN",
+"ja"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableAdvancedTTSFeatures",
+"k": "MultiString",
+"d": [
+"es-MX",
+"es-ES",
+"fr-FR",
+"pt-BR",
+"de-DE",
+"zh-Hans-CN",
+"ja",
+"en-GB",
+"en-IN",
+"en-US",
+"ko"
+]
+},
+{
+"p": "Control Panel\\International\\Geo"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Nation",
+"k": "String",
+"d": "223"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Name",
+"k": "String",
+"d": "CH"
+},
+{
+"p": "Control Panel\\Desktop"
+}
+],
+"userAfterRecipe": [
+{
+"p": "Software\\Microsoft\\Windows\\CurrentVersion\\SettingSync\\Groups\\Language"
+},
+{
+"p": "Software\\Microsoft\\Windows\\CurrentVersion\\SettingSync\\Groups\\Language",
+"n": "Enabled",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000000",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134684672
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00002000\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67569673
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Default",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Keyboard Layout"
+},
+{
+"p": "Keyboard Layout\\Toggle"
+},
+{
+"p": "Keyboard Layout\\Substitutes"
+},
+{
+"p": "Keyboard Layout\\Substitutes",
+"n": "00000409",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Keyboard Layout\\Preload"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "1",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Control Panel\\International"
+},
+{
+"p": "Control Panel\\International",
+"n": "Locale",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Control Panel\\International",
+"n": "LocaleName",
+"k": "String",
+"d": "de-CH"
+},
+{
+"p": "Control Panel\\International",
+"n": "s1159",
+"k": "String",
+"d": "AM"
+},
+{
+"p": "Control Panel\\International",
+"n": "s2359",
+"k": "String",
+"d": "PM"
+},
+{
+"p": "Control Panel\\International",
+"n": "sCurrency",
+"k": "String",
+"d": "CHF"
+},
+{
+"p": "Control Panel\\International",
+"n": "sDate",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sDecimal",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLanguage",
+"k": "String",
+"d": "DES"
+},
+{
+"p": "Control Panel\\International",
+"n": "sList",
+"k": "String",
+"d": ";"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLongDate",
+"k": "String",
+"d": "dddd, d. MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonDecimalSep",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonThousandSep",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNativeDigits",
+"k": "String",
+"d": "0123456789"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNegativeSign",
+"k": "String",
+"d": "-"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortDate",
+"k": "String",
+"d": "dd.MM.yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sThousand",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTime",
+"k": "String",
+"d": ":"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTimeFormat",
+"k": "String",
+"d": "HH:mm:ss"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortTime",
+"k": "String",
+"d": "HH:mm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sYearMonth",
+"k": "String",
+"d": "MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCalendarType",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCountry",
+"k": "String",
+"d": "41"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrency",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDate",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "NumShape",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstDayOfWeek",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstWeekOfYear",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iMeasure",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegCurr",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegNumber",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iPaperSize",
+"k": "String",
+"d": "9"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTime",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTimePrefix",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d",
+"n": "Calendar",
+"k": "String",
+"d": "Gregorian"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "InputMethodOverride",
+"k": "String",
+"d": "0409:00000807"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "WindowsOverride",
+"k": "String",
+"d": "en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1121"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable"
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableLanguagePacks",
+"k": "MultiString",
+"d": [
+"et-EE",
+"cs-cz",
+"zh-CN",
+"gu-in",
+"km-kh",
+"gl-ES",
+"as-in",
+"kk-kz",
+"en-us",
+"sl-SI",
+"ar-sa",
+"bn-in",
+"am-et",
+"ka-ge",
+"bg-bg",
+"de-de",
+"az-latn-az",
+"ur-pk",
+"mt-mt",
+"ro-RO",
+"hu-HU",
+"uz-latn-uz",
+"it-IT",
+"da-dk",
+"gd-gb",
+"el-gr",
+"eu-ES",
+"en-gb",
+"fr-CA",
+"ca-es",
+"te-in",
+"ml-in",
+"kn-in",
+"es-es",
+"fr-FR",
+"mk-mk",
+"pt-PT",
+"es-mx",
+"fi-FI",
+"ru-RU",
+"id-ID",
+"he-IL",
+"be-by",
+"af-za",
+"fa-ir",
+"chr-cher-us",
+"nl-NL",
+"hr-hr",
+"bs-latn-ba",
+"lt-LT",
+"mr-in",
+"uk-UA",
+"lv-lv",
+"or-in",
+"is-is",
+"pl-pl",
+"th-TH",
+"pt-BR",
+"ja-JP",
+"cy-gb",
+"ko-KR",
+"ug-cn",
+"nb-NO",
+"ca-es-valencia",
+"tr-TR",
+"sk-SK",
+"sr-LATN-RS",
+"sv-SE",
+"zh-TW",
+"vi-VN",
+"fil-ph",
+"ga-ie",
+"mi-nz",
+"pa-in",
+"lo-la",
+"hi-in",
+"lb-lu",
+"hy-am",
+"kok-in",
+"ms-my",
+"sr-cyrl-rs",
+"sq-al",
+"ne-np",
+"nn-no",
+"quz-pe",
+"sr-cyrl-ba",
+"ta-in",
+"tt-ru"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableSpeechFeatures",
+"k": "MultiString",
+"d": [
+"en-US",
+"fr-CA",
+"en-GB",
+"da-DK",
+"en-IN",
+"de-DE",
+"en-AU",
+"en-CA",
+"fr-FR",
+"es-ES",
+"es-MX",
+"it-IT",
+"ja-JP",
+"pt-BR",
+"zh-CN",
+"zh-HK",
+"zh-TW"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableHandwritingFeatures",
+"k": "MultiString",
+"d": [
+"nso-ZA",
+"as-IN",
+"gl-ES",
+"xh-ZA",
+"sl-SI",
+"en-US",
+"rw-RW",
+"bg-BG",
+"az-LATN-AZ",
+"de-DE",
+"be-BY",
+"af-ZA",
+"he-IL",
+"ar-EG",
+"bn-BD",
+"ga-IE",
+"bn-IN",
+"ta-IN",
+"br-FR",
+"hr-HR",
+"nl-NL",
+"bs-LATN-BA",
+"ca-ES",
+"en-GB",
+"co-FR",
+"el-GR",
+"kl-GL",
+"oc-FR",
+"rm-CH",
+"zh-CN",
+"cs-CZ",
+"cy-GB",
+"ja-JP",
+"da-DK",
+"gd-GB",
+"te-IN",
+"es-ES",
+"fr-FR",
+"kn-IN",
+"ms-BN",
+"tn-ZA",
+"es-MX",
+"et-EE",
+"eu-ES",
+"fi-FI",
+"fil-PH",
+"fj-FJ",
+"hi-IN",
+"mg-MG",
+"haw-US",
+"uz-LATN-UZ",
+"sw-KE",
+"hu-HU",
+"it-IT",
+"id-ID",
+"th-TH",
+"is-IS",
+"pl-PL",
+"pt-BR",
+"jv-LATN-ID",
+"ki-KE",
+"ko-KR",
+"lb-LU",
+"tk-TM",
+"lt-LT",
+"so-SO",
+"lv-LV",
+"mi-NZ",
+"ms-MY",
+"nb-NO",
+"nn-NO",
+"pt-PT",
+"quz-BO",
+"ro-RO",
+"ru-RU",
+"sco-LATN",
+"sk-SK",
+"sn-LATN",
+"sr-CYRL-RS",
+"sq-AL",
+"sr-LATN-RS",
+"sv-SE",
+"tr-TR",
+"uk-UA",
+"vi-VN",
+"wo-SN",
+"zh-HK",
+"zh-TW",
+"zu-ZA"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableTextToSpeechFeatures",
+"k": "MultiString",
+"d": [
+"zh-CN",
+"cs-CZ",
+"sl-SI",
+"en-US",
+"ar-SA",
+"ar-EG",
+"de-DE",
+"bg-BG",
+"de-CH",
+"da-DK",
+"fr-CA",
+"en-GB",
+"ca-ES",
+"fi-FI",
+"de-AT",
+"en-IN",
+"el-GR",
+"en-AU",
+"en-CA",
+"nl-BE",
+"en-IE",
+"fr-FR",
+"es-ES",
+"es-MX",
+"fr-CH",
+"he-IL",
+"hi-IN",
+"nl-NL",
+"hr-HR",
+"it-IT",
+"hu-HU",
+"id-ID",
+"ja-JP",
+"ko-KR",
+"ms-MY",
+"nb-NO",
+"th-TH",
+"pt-BR",
+"pl-PL",
+"pt-PT",
+"ro-RO",
+"ru-RU",
+"sk-SK",
+"sv-SE",
+"ta-IN",
+"tr-TR",
+"vi-VN",
+"zh-HK",
+"zh-TW"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableAdvancedSpeechFeatures",
+"k": "MultiString",
+"d": [
+"fr-CA",
+"en-GB",
+"es-MX",
+"da",
+"es-ES",
+"fr-FR",
+"en-IE",
+"en-CA",
+"zh-Hans-CN",
+"zh-Hant-HK",
+"pt-PT",
+"en-US",
+"en-NZ",
+"de-DE",
+"zh-Hant-TW",
+"en-AU",
+"pt-BR",
+"ko",
+"it-IT",
+"en-IN",
+"ja"
+]
+},
+{
+"p": "Control Panel\\International\\LanguageComponentsAvailable",
+"n": "AvailableAdvancedTTSFeatures",
+"k": "MultiString",
+"d": [
+"es-MX",
+"es-ES",
+"fr-FR",
+"pt-BR",
+"de-DE",
+"zh-Hans-CN",
+"ja",
+"en-GB",
+"en-IN",
+"en-US",
+"ko"
+]
+},
+{
+"p": "Control Panel\\International\\Geo"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Nation",
+"k": "String",
+"d": "223"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Name",
+"k": "String",
+"d": "CH"
+},
+{
+"p": "Control Panel\\Desktop"
+}
+],
+"lockBefore": [
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000000",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67699721
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Default",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Keyboard Layout"
+},
+{
+"p": "Keyboard Layout\\Substitutes"
+},
+{
+"p": "Keyboard Layout\\Substitutes",
+"n": "d0010409",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Keyboard Layout\\Preload"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "1",
+"k": "String",
+"d": "d0010409"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "2",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Control Panel\\International"
+},
+{
+"p": "Control Panel\\International",
+"n": "Locale",
+"k": "String",
+"d": "00000C00"
+},
+{
+"p": "Control Panel\\International",
+"n": "LocaleName",
+"k": "String",
+"d": "en-CH"
+},
+{
+"p": "Control Panel\\International",
+"n": "s1159",
+"k": "String",
+"d": "am"
+},
+{
+"p": "Control Panel\\International",
+"n": "s2359",
+"k": "String",
+"d": "pm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sCurrency",
+"k": "String",
+"d": "CHF"
+},
+{
+"p": "Control Panel\\International",
+"n": "sDate",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sDecimal",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLanguage",
+"k": "String",
+"d": "ZZZ"
+},
+{
+"p": "Control Panel\\International",
+"n": "sList",
+"k": "String",
+"d": ","
+},
+{
+"p": "Control Panel\\International",
+"n": "sLongDate",
+"k": "String",
+"d": "dddd, d MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonDecimalSep",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonThousandSep",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNativeDigits",
+"k": "String",
+"d": "0123456789"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNegativeSign",
+"k": "String",
+"d": "-"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortDate",
+"k": "String",
+"d": "dd.MM.yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sThousand",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTime",
+"k": "String",
+"d": ":"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTimeFormat",
+"k": "String",
+"d": "HH:mm:ss"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortTime",
+"k": "String",
+"d": "HH:mm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sYearMonth",
+"k": "String",
+"d": "MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCalendarType",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCountry",
+"k": "String",
+"d": "41"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrency",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDate",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "NumShape",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstDayOfWeek",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstWeekOfYear",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iMeasure",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegCurr",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegNumber",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iPaperSize",
+"k": "String",
+"d": "9"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTime",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTimePrefix",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d",
+"n": "Calendar",
+"k": "String",
+"d": "Gregorian"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-CH",
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1893"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH",
+"n": "TransientLangId",
+"k": "DWord",
+"d": 8192
+},
+{
+"p": "Control Panel\\International\\User Profile"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-CH",
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1121"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1893"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "TransientLangId",
+"k": "DWord",
+"d": 8192
+},
+{
+"p": "Control Panel\\International\\Geo"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Nation",
+"k": "String",
+"d": "223"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Name",
+"k": "String",
+"d": "CH"
+},
+{
+"p": "Control Panel\\Desktop"
+},
+{
+"p": "Control Panel\\Desktop\\MuiCached"
+},
+{
+"p": "Control Panel\\Desktop\\MuiCached",
+"n": "MachinePreferredUILanguages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+}
+],
+"lockAfterSystemRecipe": [
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000000",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Default",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Keyboard Layout"
+},
+{
+"p": "Keyboard Layout\\Substitutes"
+},
+{
+"p": "Keyboard Layout\\Substitutes",
+"n": "00000409",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Keyboard Layout\\Preload"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "1",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Control Panel\\International"
+},
+{
+"p": "Control Panel\\International",
+"n": "Locale",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Control Panel\\International",
+"n": "LocaleName",
+"k": "String",
+"d": "de-CH"
+},
+{
+"p": "Control Panel\\International",
+"n": "s1159",
+"k": "String",
+"d": "AM"
+},
+{
+"p": "Control Panel\\International",
+"n": "s2359",
+"k": "String",
+"d": "PM"
+},
+{
+"p": "Control Panel\\International",
+"n": "sCurrency",
+"k": "String",
+"d": "CHF"
+},
+{
+"p": "Control Panel\\International",
+"n": "sDate",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sDecimal",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLanguage",
+"k": "String",
+"d": "DES"
+},
+{
+"p": "Control Panel\\International",
+"n": "sList",
+"k": "String",
+"d": ";"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLongDate",
+"k": "String",
+"d": "dddd, d. MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonDecimalSep",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonThousandSep",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNativeDigits",
+"k": "String",
+"d": "0123456789"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNegativeSign",
+"k": "String",
+"d": "-"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortDate",
+"k": "String",
+"d": "dd.MM.yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sThousand",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTime",
+"k": "String",
+"d": ":"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTimeFormat",
+"k": "String",
+"d": "HH:mm:ss"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortTime",
+"k": "String",
+"d": "HH:mm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sYearMonth",
+"k": "String",
+"d": "MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCalendarType",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCountry",
+"k": "String",
+"d": "41"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrency",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDate",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "NumShape",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstDayOfWeek",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstWeekOfYear",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iMeasure",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegCurr",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegNumber",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iPaperSize",
+"k": "String",
+"d": "9"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTime",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTimePrefix",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d",
+"n": "Calendar",
+"k": "String",
+"d": "Gregorian"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-CH",
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1893"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-CH",
+"n": "TransientLangId",
+"k": "DWord",
+"d": 8192
+},
+{
+"p": "Control Panel\\International\\User Profile"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "InputMethodOverride",
+"k": "String",
+"d": "0409:00000807"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "WindowsOverride",
+"k": "String",
+"d": "en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1121"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\Geo"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Nation",
+"k": "String",
+"d": "223"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Name",
+"k": "String",
+"d": "CH"
+},
+{
+"p": "Control Panel\\Desktop"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "PreferredUILanguagesPending",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\Desktop\\MuiCached"
+},
+{
+"p": "Control Panel\\Desktop\\MuiCached",
+"n": "MachinePreferredUILanguages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+}
+],
+"defaultProfileBefore": [
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000000",
+"k": "String",
+"d": "00002000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\Language",
+"n": "00000001",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67569673
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000809\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 67699721
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000001",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "CLSID",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Software\\Microsoft\\CTF\\SortOrder\\AssemblyItem\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}\\00000000",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Default",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "Profile",
+"k": "String",
+"d": "{00000000-0000-0000-0000-000000000000}"
+},
+{
+"p": "Software\\Microsoft\\CTF\\Assemblies\\0x00000409\\{34745C63-B2F0-4784-8B67-5E12C8701A31}",
+"n": "KeyboardLayout",
+"k": "DWord",
+"d": 134677513
+},
+{
+"p": "Keyboard Layout"
+},
+{
+"p": "Keyboard Layout\\Substitutes"
+},
+{
+"p": "Keyboard Layout\\Substitutes",
+"n": "d0010409",
+"k": "String",
+"d": "00000807"
+},
+{
+"p": "Keyboard Layout\\Preload"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "2",
+"k": "String",
+"d": "00000409"
+},
+{
+"p": "Keyboard Layout\\Preload",
+"n": "1",
+"k": "String",
+"d": "d0010409"
+},
+{
+"p": "Control Panel\\International"
+},
+{
+"p": "Control Panel\\International",
+"n": "Locale",
+"k": "String",
+"d": "00000C00"
+},
+{
+"p": "Control Panel\\International",
+"n": "LocaleName",
+"k": "String",
+"d": "en-CH"
+},
+{
+"p": "Control Panel\\International",
+"n": "s1159",
+"k": "String",
+"d": "am"
+},
+{
+"p": "Control Panel\\International",
+"n": "s2359",
+"k": "String",
+"d": "pm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sCurrency",
+"k": "String",
+"d": "CHF"
+},
+{
+"p": "Control Panel\\International",
+"n": "sDate",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sDecimal",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sLanguage",
+"k": "String",
+"d": "ZZZ"
+},
+{
+"p": "Control Panel\\International",
+"n": "sList",
+"k": "String",
+"d": ","
+},
+{
+"p": "Control Panel\\International",
+"n": "sLongDate",
+"k": "String",
+"d": "dddd, d MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonDecimalSep",
+"k": "String",
+"d": "."
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonGrouping",
+"k": "String",
+"d": "3;0"
+},
+{
+"p": "Control Panel\\International",
+"n": "sMonThousandSep",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNativeDigits",
+"k": "String",
+"d": "0123456789"
+},
+{
+"p": "Control Panel\\International",
+"n": "sNegativeSign",
+"k": "String",
+"d": "-"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortDate",
+"k": "String",
+"d": "dd.MM.yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "sThousand",
+"k": "String",
+"d": "\u2019"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTime",
+"k": "String",
+"d": ":"
+},
+{
+"p": "Control Panel\\International",
+"n": "sTimeFormat",
+"k": "String",
+"d": "HH:mm:ss"
+},
+{
+"p": "Control Panel\\International",
+"n": "sShortTime",
+"k": "String",
+"d": "HH:mm"
+},
+{
+"p": "Control Panel\\International",
+"n": "sYearMonth",
+"k": "String",
+"d": "MMMM yyyy"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCalendarType",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCountry",
+"k": "String",
+"d": "41"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iCurrency",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDate",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iDigits",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "NumShape",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstDayOfWeek",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iFirstWeekOfYear",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iMeasure",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegCurr",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\International",
+"n": "iNegNumber",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iPaperSize",
+"k": "String",
+"d": "9"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTime",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTimePrefix",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\International",
+"n": "iTLZero",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d"
+},
+{
+"p": "Control Panel\\International\\\ud83c\udf0e\ud83c\udf0f\ud83c\udf0d",
+"n": "Calendar",
+"k": "String",
+"d": "Gregorian"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile System Backup\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile"
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "Languages",
+"k": "MultiString",
+"d": [
+"en-CH",
+"en-US"
+]
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowAutoCorrection",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowTextPrediction",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowCasing",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile",
+"n": "ShowShiftLock",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000807",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-US",
+"n": "0409:00000409",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "CachedLanguageName",
+"k": "String",
+"d": "@Winlangdb.dll,-1893"
+},
+{
+"p": "Control Panel\\International\\User Profile\\en-CH",
+"n": "TransientLangId",
+"k": "DWord",
+"d": 8192
+},
+{
+"p": "Control Panel\\International\\Geo"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Nation",
+"k": "String",
+"d": "223"
+},
+{
+"p": "Control Panel\\International\\Geo",
+"n": "Name",
+"k": "String",
+"d": "CH"
+},
+{
+"p": "Control Panel\\Desktop"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "BlockSendInputResets",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "CaretTimeout",
+"k": "DWord",
+"d": 5000
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "CaretWidth",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "ClickLockTime",
+"k": "DWord",
+"d": 1200
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "CoolSwitchColumns",
+"k": "String",
+"d": "7"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "CoolSwitchRows",
+"k": "String",
+"d": "3"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "CursorBlinkRate",
+"k": "String",
+"d": "530"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "DockMoving",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "DragFromMaximize",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "DragFullWindows",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "DragHeight",
+"k": "String",
+"d": "4"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "DragWidth",
+"k": "String",
+"d": "4"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FocusBorderHeight",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FocusBorderWidth",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FontSmoothing",
+"k": "String",
+"d": "2"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FontSmoothingGamma",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FontSmoothingOrientation",
+"k": "DWord",
+"d": 1
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "FontSmoothingType",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "ForegroundFlashCount",
+"k": "DWord",
+"d": 7
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "ForegroundLockTimeout",
+"k": "DWord",
+"d": 200000
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "LeftOverlapChars",
+"k": "String",
+"d": "3"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "MenuShowDelay",
+"k": "String",
+"d": "400"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "MouseWheelRouting",
+"k": "DWord",
+"d": 2
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "PaintDesktopVersion",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "Pattern",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "RightOverlapChars",
+"k": "String",
+"d": "3"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "ScreenSaveActive",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "SnapSizing",
+"k": "String",
+"d": "1"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "TileWallpaper",
+"k": "String",
+"d": "0"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WallPaper",
+"k": "String",
+"d": "C:\\Windows\\Web\\Wallpaper\\Windows\\img0.jpg"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WallpaperOriginX",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WallpaperOriginY",
+"k": "DWord",
+"d": 0
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WallpaperStyle",
+"k": "String",
+"d": "10"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WheelScrollChars",
+"k": "String",
+"d": "3"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WheelScrollLines",
+"k": "String",
+"d": "3"
+},
+{
+"p": "Control Panel\\Desktop",
+"n": "WindowArrangementActive",
+"k": "String",
+"d": "1"
+}
+]
+}

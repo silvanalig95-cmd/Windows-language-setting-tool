@@ -128,13 +128,15 @@ function Format-RegData($kind, $data) {
             return [BitConverter]::ToString($b)
         }
         'MultiString' { return '[' + ((@($data) | ForEach-Object { $_ }) -join ' ; ') + ']' }
-        'DWord' { return ('0x{0:x8} ({1})' -f ([uint32]([int64]$data -band 0xffffffff)), $data) }
+        'DWord' { return ('0x{0:x8} ({1})' -f [int]$data, $data) }
+        'QWord' { return [string]$data }
         default { return [string]$data }
     }
 }
 
 function Get-RegDump {
     param($Base, [string]$Path, [string]$Label)
+    # Lines: "<Label>\<key relative to Path>\" for keys and "<Label>\<key> | <value> | <kind> | <data>" for values.
     $out = New-Object System.Collections.Generic.List[string]
     $stack = New-Object System.Collections.Generic.Stack[string]
     $stack.Push($Path)
@@ -145,20 +147,29 @@ function Get-RegDump {
             foreach ($n in $noise) { if ($p -like "*$n*") { $skip = $true; break } }
             if ($skip) { continue }
         }
+        $rel = $p.Substring($Path.Length).TrimStart('\')
+        $keyName = $Label
+        if ($rel) { $keyName = "$Label\$rel" }
         $k = $null
-        try { $k = $Base.OpenSubKey($p, $false) } catch { $out.Add("$Label\$p | <no access>"); continue }
+        try { $k = $Base.OpenSubKey($p, $false) } catch { $out.Add("$keyName | <no access>"); continue }
         if (-not $k) { continue }
         try {
-            $out.Add("$Label\$p\")
-            foreach ($n in $k.GetValueNames()) {
-                $kind = $k.GetValueKind($n)
-                $data = $k.GetValue($n, $null, 'DoNotExpandEnvironmentNames')
+            $out.Add("$keyName\")
+            $valueNames = @()
+            try { $valueNames = @($k.GetValueNames()) } catch { $out.Add("$keyName | <values not readable: $($_.Exception.Message)>") }
+            foreach ($n in $valueNames) {
                 $vn = $n; if ($vn -eq '') { $vn = '(Default)' }
-                $out.Add(('{0}\{1} | {2} | {3} | {4}' -f $Label, $p, $vn, $kind, (Format-RegData $kind $data)))
+                try {
+                    $kind = $k.GetValueKind($n)
+                    $data = $k.GetValue($n, $null, 'DoNotExpandEnvironmentNames')
+                    $out.Add(('{0} | {1} | {2} | {3}' -f $keyName, $vn, $kind, (Format-RegData $kind $data)))
+                }
+                catch { $out.Add(('{0} | {1} | <error {2}>' -f $keyName, $vn, $_.Exception.Message)) }
             }
-            foreach ($s in $k.GetSubKeyNames()) { if ($p) { $stack.Push("$p\$s") } else { $stack.Push($s) } }
+            $subNames = @()
+            try { $subNames = @($k.GetSubKeyNames()) } catch { $out.Add("$keyName | <subkeys not readable: $($_.Exception.Message)>") }
+            foreach ($s in $subNames) { if ($p) { $stack.Push("$p\$s") } else { $stack.Push($s) } }
         }
-        catch { $out.Add("$Label\$p | <error $($_.Exception.Message)>") }
         finally { $k.Close() }
     }
     return $out
@@ -179,7 +190,7 @@ function Get-Dump([string[]]$Areas) {
                 foreach ($p in 'SYSTEM\CurrentControlSet\Control\MUI', 'SYSTEM\CurrentControlSet\Control\Nls', 'SYSTEM\CurrentControlSet\Control\Keyboard Layout',
                     'SYSTEM\CurrentControlSet\Control\CommonGlobUserSettings', 'SOFTWARE\Microsoft\Windows\CurrentVersion\Control Panel', 'SOFTWARE\Policies\Microsoft\Control Panel',
                     'SOFTWARE\Microsoft\CTF', 'SOFTWARE\Microsoft\Input') {
-                    foreach ($l in (Get-RegDump $hklm $p 'HKLM')) { $lines.Add($l) }
+                    foreach ($l in (Get-RegDump $hklm $p "HKLM\$p")) { $lines.Add($l) }
                 }
             }
             'DefaultHive' {
@@ -252,11 +263,11 @@ switch ($Scenario) {
     'Recipe' {
         $areas = @('HKCU', 'DEFAULT')
         Write-Step 'Reading the registry BEFORE (can take 1-3 minutes, please wait)...'
-        $before = Get-Dump $areas
-        Write-Step "  $($before.Count) lines" 'DarkGray'
+        $dumpBefore = Get-Dump $areas
+        Write-Step "  $($dumpBefore.Count) lines" 'DarkGray'
         $job = Join-Path ([IO.Path]::GetTempPath()) "lpdiff-$stamp"
         $null = New-Item -ItemType Directory -Path (Join-Path $job 'out') -Force
-        $j = [ordered]@{ ExpectedSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; DisplayLanguage = $sel.DisplayLanguage; RegionalFormat = $sel.RegionalFormat; GeoId = $sel.GeoId; Tips = @($sel.Tips); DisableSync = $true }
+        $j = [ordered]@{ ExpectedSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value; DisplayLanguage = $sel.DisplayLanguage; DisplayLcid = [int]$sel.DisplayLcid; RegionalFormat = $sel.RegionalFormat; GeoId = $sel.GeoId; Tips = @($sel.Tips); DisableSync = $true }
         [IO.File]::WriteAllText((Join-Path $job 'job.json'), ($j | ConvertTo-Json))
         Write-Step "Running the recipe in this account ($($me.Name), $($j.ExpectedSid))..."
         & ([scriptblock]::Create((Get-LPWorkerScriptText))) -JobDir $job
@@ -265,28 +276,28 @@ switch ($Scenario) {
         if ($wr.Success) { Write-Step 'Recipe: success' 'Green' } else { Write-Step "Recipe FAILED: $($wr.Error)" 'Red' }
         Start-Sleep -Seconds 3
         Write-Step 'Reading the registry AFTER (can take 1-3 minutes)...'
-        $after = Get-Dump $areas
-        Write-Diff $before $after 'Recipe in the current user (worker code of LanguageProfile.ps1)'
+        $dumpAfter = Get-Dump $areas
+        Write-Diff $dumpBefore $dumpAfter 'Recipe in the current user (worker code of LanguageProfile.ps1)'
     }
     'RecipeAsSystem' {
         if (-not $isAdmin) { throw 'Run elevated.' }
         $null = Initialize-LPEngine -ScriptRoot (Split-Path $toolPath) -Console -LogName 'RegistryDiff'
         $areas = @('DEFAULT', 'S-1-5-19', 'S-1-5-20', 'HKLM')
         Write-Step 'Reading the registry BEFORE...'
-        $before = Get-Dump $areas
+        $dumpBefore = Get-Dump $areas
         Write-Step 'Running the recipe as SYSTEM through a one-time scheduled task...'
         $w = Invoke-LPWorkerTask -Sid 'S-1-5-18' -Label 'SYSTEM (diff)' -Selection $sel
         if ($w.Success) { Write-Step 'Worker as SYSTEM: success' 'Green' } else { Write-Step "Worker as SYSTEM FAILED: $($w.Error)" 'Red' }
         Start-Sleep -Seconds 3
         Write-Step 'Reading the registry AFTER...'
-        $after = Get-Dump $areas
-        Write-Diff $before $after 'Recipe as SYSTEM via scheduled task (writes HKU\.DEFAULT)'
+        $dumpAfter = Get-Dump $areas
+        Write-Diff $dumpBefore $dumpAfter 'Recipe as SYSTEM via scheduled task (writes HKU\.DEFAULT)'
     }
     'CopyToSystem' {
         if (-not $isAdmin) { throw 'Run elevated.' }
         $areas = @('DEFAULT', 'S-1-5-19', 'S-1-5-20', 'HKLM', 'DefaultHive')
         Write-Step 'Reading the registry BEFORE...'
-        $before = Get-Dump $areas
+        $dumpBefore = Get-Dump $areas
         $build = [int](Get-CimInstance Win32_OperatingSystem).BuildNumber
         if (Get-Command Copy-UserInternationalSettingsToSystem -ErrorAction SilentlyContinue) {
             Write-Host 'Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true'
@@ -311,21 +322,21 @@ switch ($Scenario) {
         }
         Start-Sleep -Seconds 5
         Write-Step 'Reading the registry AFTER...'
-        $after = Get-Dump $areas
-        Write-Diff $before $after 'Microsoft copy to welcome screen / system accounts / new users'
+        $dumpAfter = Get-Dump $areas
+        Write-Diff $dumpBefore $dumpAfter 'Microsoft copy to welcome screen / system accounts / new users'
     }
     'SystemPreferredUILanguage' {
         if (-not $isAdmin) { throw 'Run elevated.' }
         if (-not (Get-Command Set-SystemPreferredUILanguage -ErrorAction SilentlyContinue)) { throw 'Set-SystemPreferredUILanguage is not available on this Windows.' }
         $areas = @('DEFAULT', 'HKLM')
         Write-Step 'Reading the registry BEFORE...'
-        $before = Get-Dump $areas
+        $dumpBefore = Get-Dump $areas
         Write-Step "Set-SystemPreferredUILanguage $DisplayLanguage"
         Set-SystemPreferredUILanguage -Language $DisplayLanguage
         Start-Sleep -Seconds 3
         Write-Step 'Reading the registry AFTER...'
-        $after = Get-Dump $areas
-        Write-Diff $before $after "Set-SystemPreferredUILanguage $DisplayLanguage"
+        $dumpAfter = Get-Dump $areas
+        Write-Diff $dumpBefore $dumpAfter "Set-SystemPreferredUILanguage $DisplayLanguage"
     }
 }
 }
