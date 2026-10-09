@@ -1,0 +1,36 @@
+{
+  "presets": [
+    {
+      "name": "Standard",
+      "description": "English (United States) display, German (Switzerland) formats, Switzerland, Swiss German keyboard",
+      "displayLanguage": "en-US",
+      "regionalFormat": "de-CH",
+      "geoId": 223,
+      "keyboards": [ "00000807" ]
+    },
+    {
+      "name": "Swiss German UI",
+      "description": "German (Germany) display, German (Switzerland) formats, Swiss German keyboard",
+      "displayLanguage": "de-DE",
+      "regionalFormat": "de-CH",
+      "geoId": 223,
+      "keyboards": [ "00000807" ]
+    },
+    {
+      "name": "Swiss French",
+      "description": "French (France) display, French (Switzerland) formats, Swiss French keyboard",
+      "displayLanguage": "fr-FR",
+      "regionalFormat": "fr-CH",
+      "geoId": 223,
+      "keyboards": [ "0000100C" ]
+    },
+    {
+      "name": "English (UK)",
+      "description": "English (United Kingdom) display and formats, United Kingdom keyboard",
+      "displayLanguage": "en-GB",
+      "regionalFormat": "en-GB",
+      "geoId": 242,
+      "keyboards": [ "00000809" ]
+    }
+  ]
+}
