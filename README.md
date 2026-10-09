@@ -279,6 +279,7 @@ Before any change, every key below is exported **per target** to `%ProgramData%\
 | `Software\Microsoft\CTF\SortOrder` | Text-input order per language (`AssemblyItem\0x<langid>`, `Language`) | Other languages removed (signed-in users, .DEFAULT); whole key replaced (copies) |
 | `Software\Microsoft\CTF\Assemblies` | Default input profile per language | Same as above |
 | `Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language` | `Enabled = 0` | Value set (option; not in .DEFAULT, S-1-5-19 or S-1-5-20) |
+| `Software\LanguageProfile\Jobs\<id>` | Temporary report of the in-session step (`Started`, `Log`, `Result`) | Created by the step in the account's own hive, read by the tool, deleted right afterwards |
 
 In signed-in users and in `.DEFAULT`, these keys are written by the Windows cmdlets themselves, plus
 the Preload rewrite, the backup sync and the CTF cleanup. In all other hives they are an exact copy
@@ -293,7 +294,13 @@ of `.DEFAULT` after the recipe. If a key did not exist before, Restore removes i
 | System locale (`Set-WinSystemLocale`) | Option, default off |
 | Language packs (`Install-Language`, `Add-WindowsPackage`, `Uninstall-Language`) | When needed / option. **Not rolled back by Restore.** |
 | Scheduled tasks under `\LanguageProfile\` | One-time worker tasks, deleted after each run |
-| `%ProgramData%\LanguageProfile\{Logs,Backups,Jobs}` | Restricted to SYSTEM and Administrators. Job folders also grant the target user read access, and write access to `out\` only. |
+| `%ProgramData%\LanguageProfile\{Logs,Backups,Jobs}` | Restricted to SYSTEM and Administrators. Each job folder also gives the target user read access, and write access to its `out\` subfolder only. |
+
+**Why `%ProgramData%\LanguageProfile` asks normal users for admin rights:**
+- It holds the backups (every account's language settings) and the scripts the tool runs **as SYSTEM**.
+- If normal users could write there, any user could replace such a script and run code as SYSTEM. That's also why the tool doesn't use `C:\temp` or a user's AppData for this.
+- The step that runs in a user's session (not elevated, on purpose) only needs to read its script. It reports back through the user's own registry (`Software\LanguageProfile\Jobs\<id>`), which a user can always write to; `out\` is only a second channel.
+- Job folders are deleted without following junctions, so a user cannot redirect the elevated cleanup.
 
 **Read only:**
 - `ProfileList`;

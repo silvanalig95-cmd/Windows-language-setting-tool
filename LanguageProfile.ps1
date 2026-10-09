@@ -1026,9 +1026,18 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         catch { }
         $jobs = Join-Path $script:DataRoot 'Jobs'
         if (Test-Path -LiteralPath $jobs) {
-            Get-ChildItem -LiteralPath $jobs -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop } catch { }
+            foreach ($d in @(Get-ChildItem -LiteralPath $jobs -Directory -ErrorAction SilentlyContinue)) { Remove-LPJobFolder $d.FullName }
+        }
+        $hku = Get-LPBaseKey 'Users'
+        foreach ($n in (Get-LPLoadedHives)) {
+            if ($n -like '*_Classes') { continue }
+            try {
+                if (Test-LPRegKey $hku "$n\Software\LanguageProfile\Jobs") {
+                    Remove-LPRegTree -Base $hku -Path "$n\Software\LanguageProfile\Jobs"
+                    Remove-LPEmptyKeyChain -Base $hku -Root $n -Path 'Software\LanguageProfile' -Top 'Software\LanguageProfile'
+                }
             }
+            catch { }
         }
     }
 
@@ -2450,9 +2459,18 @@ $ErrorActionPreference = 'Stop'
 $outDir = Join-Path $JobDir 'out'
 $logFile = Join-Path $outDir 'worker.log'
 $result = [ordered]@{ Sid = $null; User = $null; Success = $false; Error = $null; Steps = @(); Warnings = @(); After = $null }
+$regKey = $null   # HKCU\Software\LanguageProfile\Jobs\<id>: the report channel the account can always write to
 
 function Write-WorkerLog([string]$Message) {
-    try { [IO.File]::AppendAllText($logFile, ('{0:HH:mm:ss} {1}' -f (Get-Date), $Message) + "`r`n", [Text.Encoding]::UTF8) } catch { }
+    $line = '{0:HH:mm:ss} {1}' -f (Get-Date), $Message
+    try { [IO.File]::AppendAllText($logFile, $line + "`r`n", [Text.Encoding]::UTF8) } catch { }
+    if ($regKey) {
+        try {
+            $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($regKey)
+            try { $old = @($k.GetValue('Log', [string[]]@())); $k.SetValue('Log', [string[]]($old + $line), [Microsoft.Win32.RegistryValueKind]::MultiString) } finally { $k.Close() }
+        }
+        catch { }
+    }
 }
 function Invoke-WorkerStep([string]$Name, [scriptblock]$Action) {
     Write-WorkerLog "Step: $Name"
@@ -2474,6 +2492,7 @@ function Write-LPLog([string]$Message, [string]$Level) { Write-WorkerLog $Messag
 
 try {
     $job = [IO.File]::ReadAllText((Join-Path $JobDir 'job.json')) | ConvertFrom-Json
+    if ($job.JobKey) { $regKey = [string]$job.JobKey }
     $me = [Security.Principal.WindowsIdentity]::GetCurrent()
     $result.Sid = $me.User.Value
     $result.User = $me.Name
@@ -2552,9 +2571,19 @@ catch {
 }
 finally {
     $json = $result | ConvertTo-Json -Depth 8
-    $tmp = Join-Path $outDir 'result.tmp'
-    [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
-    Move-Item -LiteralPath $tmp -Destination (Join-Path $outDir 'result.json') -Force
+    if ($regKey) {
+        try {
+            $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($regKey)
+            try { $k.SetValue('Result', $json, [Microsoft.Win32.RegistryValueKind]::String) } finally { $k.Close() }
+        }
+        catch { }
+    }
+    try {
+        $tmp = Join-Path $outDir 'result.tmp'
+        [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
+        Move-Item -LiteralPath $tmp -Destination (Join-Path $outDir 'result.json') -Force
+    }
+    catch { }
 }
 '@
 
@@ -2577,11 +2606,10 @@ finally {
 
     # Explains why a worker task ended without a result, from the marker files the bootstrap writes.
     function Get-LPWorkerFailure {
-        param([Parameter(Mandatory)][string]$OutDir, [string]$Label, [string]$TaskResult)
-        $read = { param($f) $p = Join-Path $OutDir $f; if (Test-Path -LiteralPath $p) { (@(Get-Content -LiteralPath $p -Encoding UTF8) -join "`n").Trim() } else { $null } }
-        $started = & $read 'started.txt'
-        $bootErr = & $read 'bootstrap-error.txt'
-        $wlog = & $read 'worker.log'
+        param([Parameter(Mandatory)]$Markers, [string]$Label, [string]$TaskResult)
+        $started = $Markers.Started
+        $bootErr = $Markers.BootstrapError
+        $wlog = $Markers.WorkerLog
         $detail = New-Object System.Collections.Generic.List[string]
         if ($TaskResult) { $detail.Add("Task result: $TaskResult") }
         if ($started) { $detail.Add("Bootstrap: $started") }
@@ -2611,16 +2639,37 @@ finally {
     # policy does not apply to it). It only uses cmdlets, so it also works in Constrained Language Mode and
     # reports that mode, or any error, through marker files in out\.
     function Get-LPWorkerBootstrap {
-        param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$WorkerPath, [Parameter(Mandatory)][string]$JobDir)
+        param([Parameter(Mandatory)][string]$OutDir, [Parameter(Mandatory)][string]$WorkerPath, [Parameter(Mandatory)][string]$JobDir, [Parameter(Mandatory)][string]$JobKey)
         $q = { param($t) $t.Replace("'", "''") }
         return (@(
                 ("`$o = '{0}'" -f (& $q $OutDir))
+                ("`$r = 'HKCU:\{0}'" -f (& $q $JobKey))
                 '$m = [string]$ExecutionContext.SessionState.LanguageMode'
-                'Set-Content -LiteralPath (Join-Path $o ''started.txt'') -Value (''started '' + (Get-Date -Format s) + '' mode='' + $m)'
+                '$s = ''started '' + (Get-Date -Format s) + '' mode='' + $m'
+                'if (-not (Test-Path -LiteralPath $r)) { $null = New-Item -Path $r -Force }'
+                'Set-ItemProperty -LiteralPath $r -Name ''Started'' -Value $s'
+                'Set-Content -LiteralPath (Join-Path $o ''started.txt'') -Value $s'
                 'if ($m -ne ''FullLanguage'') { exit 3 }'
                 ("try {{ & ([scriptblock]::Create((Get-Content -LiteralPath '{0}' -Raw -Encoding UTF8))) -JobDir '{1}' }}" -f (& $q $WorkerPath), (& $q $JobDir))
-                'catch { Set-Content -LiteralPath (Join-Path $o ''bootstrap-error.txt'') -Value ($_ | Out-String); exit 4 }'
+                'catch { $e = ($_ | Out-String); Set-ItemProperty -LiteralPath $r -Name ''BootstrapError'' -Value $e; Set-Content -LiteralPath (Join-Path $o ''bootstrap-error.txt'') -Value $e; exit 4 }'
             ) -join "`n")
+    }
+
+    # Reads the worker's report: the account's registry (HKU\<root>\<JobKey>) first, the out\ folder second.
+    function Read-LPWorkerMarkers {
+        param([string]$OutDir, $Base, [string]$RegPath)
+        $file = { param($f) if ($OutDir) { $p = Join-Path $OutDir $f; if (Test-Path -LiteralPath $p) { (@(Get-Content -LiteralPath $p -Encoding UTF8) -join "`n").Trim() } } }
+        $reg = { param($n) if ($Base -and $RegPath) { $v = Get-LPRegValue $Base $RegPath $n; if ($null -ne $v) { (@($v) -join "`n").Trim() } } }
+        $m = [ordered]@{ Started = $null; BootstrapError = $null; WorkerLog = $null; Result = $null }
+        $m.Started = & $reg 'Started'
+        if (-not $m.Started) { $m.Started = & $file 'started.txt' }
+        $m.BootstrapError = & $reg 'BootstrapError'
+        if (-not $m.BootstrapError) { $m.BootstrapError = & $file 'bootstrap-error.txt' }
+        $m.WorkerLog = & $reg 'Log'
+        if (-not $m.WorkerLog) { $m.WorkerLog = & $file 'worker.log' }
+        $m.Result = & $reg 'Result'
+        if (-not $m.Result) { $m.Result = & $file 'result.json' }
+        return [pscustomobject]$m
     }
 
     # Runs the worker as $Sid through a one-time scheduled task, waits, returns the result, cleans up.
@@ -2632,6 +2681,11 @@ finally {
         $jobDir = Join-Path (Join-Path $script:DataRoot 'Jobs') $guid
         $outDir = Join-Path $jobDir 'out'
         $taskName = "LanguageProfile-$guid"
+        $jobKey = "Software\LanguageProfile\Jobs\$guid"
+        $regRoot = $Sid
+        if ($isSystem) { $regRoot = '.DEFAULT' }
+        $hku = Get-LPBaseKey 'Users'
+        $regPath = Join-LPRegPath $regRoot $jobKey
         $registered = $false
         $fail = { param($Reason, $Detail) [pscustomobject]@{ Success = $false; Error = $Reason; Detail = @($Detail); Steps = @(); Warnings = @(); After = $null; RunAs = $null; WorkerStarted = $false } }
         try {
@@ -2650,13 +2704,14 @@ finally {
                 GeoId           = [int]$Selection.GeoId
                 Tips            = @($Selection.Tips)
                 DisableSync     = [bool]($Selection.DisableSync -and -not $isSystem)
+                JobKey          = $jobKey
             }
             $utf8 = New-Object Text.UTF8Encoding($false)
             [IO.File]::WriteAllText((Join-Path $jobDir 'job.json'), ($job | ConvertTo-Json -Depth 5), $utf8)
             $workerPath = Join-Path $jobDir 'worker.ps1'
             [IO.File]::WriteAllText($workerPath, (Get-LPWorkerScriptText), $utf8)
 
-            $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-LPWorkerBootstrap -OutDir $outDir -WorkerPath $workerPath -JobDir $jobDir)))
+            $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes((Get-LPWorkerBootstrap -OutDir $outDir -WorkerPath $workerPath -JobDir $jobDir -JobKey $jobKey)))
             $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
             $action = New-ScheduledTaskAction -Execute $psExe -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand $enc"
             $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes ($TimeoutMinutes + 2)) -MultipleInstances IgnoreNew
@@ -2687,10 +2742,11 @@ finally {
             $started = Get-Date
             Start-ScheduledTask -TaskPath $script:TaskPath -TaskName $taskName
             $resultFile = Join-Path $outDir 'result.json'
+            $hasResult = { (Test-Path -LiteralPath $resultFile) -or ($null -ne (Get-LPRegValue $hku $regPath 'Result')) }
             $deadline = $started.AddMinutes($TimeoutMinutes)
             $sawRunning = $false
             $ended = $null
-            while (-not (Test-Path -LiteralPath $resultFile)) {
+            while (-not (& $hasResult)) {
                 if ((Get-Date) -gt $deadline) { $ended = "did not finish within $TimeoutMinutes minutes"; break }
                 Start-Sleep -Milliseconds 700
                 $t = Get-ScheduledTask -TaskPath $script:TaskPath -TaskName $taskName -ErrorAction SilentlyContinue
@@ -2699,24 +2755,22 @@ finally {
                 $info = Get-ScheduledTaskInfo -InputObject $t -ErrorAction SilentlyContinue
                 if ($info -and $info.LastRunTime -and $info.LastRunTime -ge $started.AddSeconds(-5) -and $info.LastTaskResult -ne 267009 -and $info.LastTaskResult -ne 267011) {
                     Start-Sleep -Seconds 2
-                    if (-not (Test-Path -LiteralPath $resultFile)) { $ended = ('ended with result 0x{0:X8} after {1:N0} s' -f $info.LastTaskResult, ((Get-Date) - $started).TotalSeconds) }
+                    if (-not (& $hasResult)) { $ended = ('ended with result 0x{0:X8} after {1:N0} s' -f $info.LastTaskResult, ((Get-Date) - $started).TotalSeconds) }
                     break
                 }
                 if (-not $sawRunning -and ((Get-Date) - $started).TotalSeconds -gt 90) { $ended = 'did not start within 90 seconds (is the session still active?)'; break }
             }
-            if (-not (Test-Path -LiteralPath $resultFile)) {
-                $f = Get-LPWorkerFailure -OutDir $outDir -Label $Label -TaskResult $ended
+            $markers = Read-LPWorkerMarkers -OutDir $outDir -Base $hku -RegPath $regPath
+            if (-not $markers.Result) {
+                $f = Get-LPWorkerFailure -Markers $markers -Label $Label -TaskResult $ended
                 Write-LPLog ("The task for $Label $ended. " + $f.Reason) -Level Warn
                 foreach ($d in $f.Detail) { Write-LPLog ("  [$Label] $d") -Level Detail }
                 $r = & $fail $f.Reason $f.Detail
                 $r.WorkerStarted = $f.WorkerStarted
                 return $r
             }
-            $res = [IO.File]::ReadAllText($resultFile) | ConvertFrom-Json
-            $logLines = @()
-            $wl = Join-Path $outDir 'worker.log'
-            if (Test-Path -LiteralPath $wl) { $logLines = @(Get-Content -LiteralPath $wl -Encoding UTF8) }
-            foreach ($l in $logLines) { Write-LPLog ("  [$Label] $l") -Level Detail }
+            $res = $markers.Result | ConvertFrom-Json
+            foreach ($l in @(([string]$markers.WorkerLog) -split "`n" | Where-Object { $_ })) { Write-LPLog ("  [$Label] $l") -Level Detail }
             return [pscustomobject]@{ Success = [bool]$res.Success; Error = $res.Error; Detail = @(); Steps = @($res.Steps); Warnings = @($res.Warnings); After = $res.After; RunAs = $res.User; WorkerStarted = $true }
         }
         catch {
@@ -2724,8 +2778,21 @@ finally {
         }
         finally {
             if ($registered) { try { Unregister-ScheduledTask -TaskPath $script:TaskPath -TaskName $taskName -Confirm:$false -ErrorAction Stop } catch { Write-LPLog "Could not delete task $taskName : $($_.Exception.Message)" -Level Warn } }
-            try { Remove-Item -LiteralPath $jobDir -Recurse -Force -ErrorAction Stop } catch { }
+            try {
+                Remove-LPRegTree -Base $hku -Path $regPath
+                Remove-LPEmptyKeyChain -Base $hku -Root $regRoot -Path 'Software\LanguageProfile\Jobs' -Top 'Software\LanguageProfile'
+            }
+            catch { }
+            Remove-LPJobFolder $jobDir
         }
+    }
+
+    # Deletes a job folder without following junctions/symlinks the target user could have placed in out\
+    # (Directory.Delete removes reparse points instead of recursing through them).
+    function Remove-LPJobFolder {
+        param([string]$Path)
+        if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return }
+        try { [IO.Directory]::Delete($Path, $true) } catch { Write-LPLog "Could not delete $Path : $($_.Exception.Message)" -Level Warn }
     }
 
     # The SYSTEM account's hive is HKU\.DEFAULT = the lock/welcome screen. Windows' own cmdlets run there

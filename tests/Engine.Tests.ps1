@@ -296,29 +296,38 @@ $wa = [System.Management.Automation.Language.Parser]::ParseInput($wt, [ref]$wtok
 $cmdNames = @($wa.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] }, $true) | ForEach-Object { $_.GetCommandName() })
 Assert (Eq (@('Set-WinUserLanguageList', 'Set-WinDefaultInputMethodOverride', 'Set-WinUILanguageOverride', 'Set-Culture', 'Set-WinHomeLocation') | Where-Object { $cmdNames -contains $_ }) @('Set-WinUserLanguageList', 'Set-WinDefaultInputMethodOverride', 'Set-WinUILanguageOverride', 'Set-Culture', 'Set-WinHomeLocation')) 'worker runs the full recipe'
 
-# Worker bootstrap and failure diagnosis (in-session step blocked on a managed device)
-$boot = Get-LPWorkerBootstrap -OutDir "C:\ProgramData\LanguageProfile\Jobs\a'b\out" -WorkerPath 'C:\x\worker.ps1' -JobDir 'C:\x'
+# Worker bootstrap, report channel and failure diagnosis (in-session step on a managed device)
+$boot = Get-LPWorkerBootstrap -OutDir "C:\ProgramData\LanguageProfile\Jobs\a'b\out" -WorkerPath 'C:\x\worker.ps1' -JobDir 'C:\x' -JobKey 'Software\LanguageProfile\Jobs\abc'
 $be = $null; $bt = $null
 $bast = [System.Management.Automation.Language.Parser]::ParseInput($boot, [ref]$bt, [ref]$be)
-Assert (@($be).Count -eq 0 -and $boot -match "a''b") 'bootstrap parses and quotes paths'
+Assert (@($be).Count -eq 0 -and $boot -match "a''b" -and $boot -match [regex]::Escape("HKCU:\Software\LanguageProfile\Jobs\abc")) 'bootstrap parses, quotes paths, reports to HKCU'
 $methodCalls = @($bast.FindAll({ param($n) $n -is [System.Management.Automation.Language.InvokeMemberExpressionAst] }, $true) | ForEach-Object { $_.Extent.Text })
 Assert ((Eq $methodCalls @('[scriptblock]::Create((Get-Content -LiteralPath ''C:\x\worker.ps1'' -Raw -Encoding UTF8))'))) 'bootstrap makes no .NET calls before checking the language mode (works in Constrained Language Mode)'
+$mk = { param($Started, $BootstrapError, $WorkerLog) [pscustomobject]@{ Started = $Started; BootstrapError = $BootstrapError; WorkerLog = $WorkerLog; Result = $null } }
+$f = Get-LPWorkerFailure -Markers (& $mk $null $null $null) -Label 'PC\u' -TaskResult 'ended with result 0x00000001'
+Assert ($f.Reason -like '*did not start*' -and -not $f.WorkerStarted) 'no marker: PowerShell did not start / was stopped'
+$f = Get-LPWorkerFailure -Markers (& $mk 'started 2026-10-09T16:56:10 mode=ConstrainedLanguage' $null $null) -Label 'PC\u'
+Assert ($f.Reason -like '*ConstrainedLanguage*' -and $f.LanguageMode -eq 'ConstrainedLanguage') 'Constrained Language Mode recognized'
+$f = Get-LPWorkerFailure -Markers (& $mk 'started 2026-10-09T16:56:10 mode=FullLanguage' 'This script contains malicious content and has been blocked by your antivirus software.' $null) -Label 'PC\u'
+Assert ($f.Reason -like '*antivirus / AMSI*') 'antivirus block recognized'
+$f = Get-LPWorkerFailure -Markers (& $mk 'started 2026-10-09T16:56:10 mode=FullLanguage' $null "16:56:12 Step: Language list (Set-WinUserLanguageList)`n16:56:20 Step: Text input leftovers (CTF)") -Label 'PC\u'
+Assert ($f.Reason -like '*stopped before it finished*Text input leftovers*' -and $f.WorkerStarted) 'worker stopped mid-way recognized, last step named'
+
+# Report channel: registry first, files second
 $tmpOut = Join-Path ([IO.Path]::GetTempPath()) ('lpfail-' + [guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $tmpOut
-$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u' -TaskResult 'ended with result 0x00000001'
-Assert ($f.Reason -like '*did not start*' -and -not $f.WorkerStarted) 'no marker: PowerShell did not start / was stopped'
-Set-Content -LiteralPath (Join-Path $tmpOut 'started.txt') -Value 'started 2026-10-09T16:56:10 mode=ConstrainedLanguage'
-$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
-Assert ($f.Reason -like '*ConstrainedLanguage*' -and $f.LanguageMode -eq 'ConstrainedLanguage') 'Constrained Language Mode recognized'
-Set-Content -LiteralPath (Join-Path $tmpOut 'started.txt') -Value 'started 2026-10-09T16:56:10 mode=FullLanguage'
-Set-Content -LiteralPath (Join-Path $tmpOut 'bootstrap-error.txt') -Value 'This script contains malicious content and has been blocked by your antivirus software.'
-$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
-Assert ($f.Reason -like '*antivirus / AMSI*') 'antivirus block recognized'
-Remove-Item -LiteralPath (Join-Path $tmpOut 'bootstrap-error.txt')
-Set-Content -LiteralPath (Join-Path $tmpOut 'worker.log') -Value @('16:56:12 Step: Language list (Set-WinUserLanguageList)')
-$f = Get-LPWorkerFailure -OutDir $tmpOut -Label 'PC\u'
-Assert ($f.Reason -like '*stopped before it finished*Set-WinUserLanguageList*' -and $f.WorkerStarted) 'worker killed mid-way recognized'
-Remove-Item -LiteralPath $tmpOut -Recurse -Force
+Set-Content -LiteralPath (Join-Path $tmpOut 'started.txt') -Value 'started X mode=FullLanguage'
+$reg = [FakeKey]::new([FakeNode]::new())
+$m = Read-LPWorkerMarkers -OutDir $tmpOut -Base $reg -RegPath 'S-1\Software\LanguageProfile\Jobs\abc'
+Assert ($m.Started -eq 'started X mode=FullLanguage' -and -not $m.Result) 'markers fall back to the job folder'
+$jk = $reg.CreateSubKey('S-1\Software\LanguageProfile\Jobs\abc')
+$jk.SetValue('Started', 'started Y mode=FullLanguage', 'String')
+$jk.SetValue('Log', [string[]]@('l1', 'l2'), 'MultiString')
+$jk.SetValue('Result', '{"Success":true}', 'String')
+$m = Read-LPWorkerMarkers -OutDir $tmpOut -Base $reg -RegPath 'S-1\Software\LanguageProfile\Jobs\abc'
+Assert ($m.Started -like 'started Y*' -and $m.WorkerLog -eq "l1`nl2" -and ($m.Result | ConvertFrom-Json).Success) 'markers read from the account''s registry first'
+Remove-LPJobFolder $tmpOut
+Assert (-not (Test-Path -LiteralPath $tmpOut)) 'job folder removed'
 
 # Dynamic scoping that Use-LPHive relies on (scriptblock sees the caller's locals inside the module)
 $m = New-Module -ScriptBlock {
