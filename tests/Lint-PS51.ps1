@@ -89,6 +89,13 @@ else {
     foreach ($r in ($refs | Select-Object -Unique)) { if ($names -notcontains $r) { Report "control $r is used but not defined in the XAML" } }
 }
 
+# Other XAML windows (dialogs): well-formed, no event handlers in the markup
+foreach ($dm in [regex]::Matches($text, "(?s)\`$(LP\w+Xaml) = @'\r?\n(.*?)\r?\n'@")) {
+    if ($dm.Groups[1].Value -eq 'LPXaml') { continue }
+    try { [xml]$dx = $dm.Groups[2].Value } catch { Report "$($dm.Groups[1].Value) is not well-formed: $($_.Exception.Message)" }
+    if ($dm.Groups[2].Value -match '\s(Click|Checked|SelectionChanged|x:Class)=') { Report "$($dm.Groups[1].Value) contains event handlers or x:Class" }
+}
+
 if ($fail -eq 0) { Write-Host 'Lint OK' -ForegroundColor Green; exit 0 }
 Write-Host "$fail problem(s)" -ForegroundColor Red
 exit 1

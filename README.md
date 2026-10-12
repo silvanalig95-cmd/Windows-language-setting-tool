@@ -9,6 +9,9 @@ language, one regional format and one or more keyboard layouts. The tool:
 - removes every other language and keyboard from those places;
 - stops Windows from adding layouts back.
 
+**New to the tool?** Read the user guide [GUIDE.md](GUIDE.md): what it does, how to use it, what to keep
+in mind. This README is the technical reference.
+
 > **Status: partly verified on Windows.** Verified on a Windows 11 Enterprise 25H2 (build 26200) company device:
 >
 > - the read-only Status and Preview;
@@ -54,7 +57,13 @@ Requirements:
      will be uninstalled.
 
    If something is BLOCKED, nothing is changed and the readiness list says what to do.
-4. The result tells you who must sign out and whether a restart is needed.
+4. The result tells you who must sign out and whether a restart is needed. When a restart is needed,
+   an orange "RESTART REQUIRED" dialog shows the reasons:
+   - **Restart later** is the default button: Enter, Esc and closing the dialog choose it;
+   - **Restart now** has to be clicked, and closes open programs without saving.
+
+   After "later", an orange bar stays at the top of the window with a **Restart now...** button that
+   asks again, with No as the default.
 
 Step by step instead of one click: the bar below the preset shows where you are, with a one-line hint
 for the next step:

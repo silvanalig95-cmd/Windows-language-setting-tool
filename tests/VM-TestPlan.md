@@ -55,6 +55,9 @@ If a run fails, the transcript contains the error.
   - While it starts, the launcher window shows "Starting Language Profile..." until the tool window is visible.
   - The tool window shows "Loading..." with a moving bar at the bottom right until the scan is done.
   - The session log has "Window shown ... after the start" and "Scan took ..." lines. Please send these timings.
+- [ ] Restart prompt (after an Apply that needs a restart): the orange "RESTART REQUIRED" dialog
+  appears. Pressing Enter or Esc does **not** restart; it chooses "Restart later". The orange bar with
+  "Restart now..." stays at the top, and its button asks again with No as the default.
 - [ ] Step bar: "1 Choose settings" is blue. **Next: Preview changes** (bottom right) switches to the preview
   and step 2. **Back to settings** goes back. Changing a field after the preview goes back to step 1.
 - [ ] "Uninstall other language packs" is ticked. The orange box lists the packs on this PC, e.g.

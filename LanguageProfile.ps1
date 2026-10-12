@@ -3335,6 +3335,7 @@ finally {
             Outcome       = $outcome
             ExitCode      = $exit
             RestartNeeded = $restartNeeded
+            RestartReasons = @($restartReasons | Select-Object -Unique)
             SignOut       = $signOut.ToArray()
             NextSignIn    = $nextSignIn.ToArray()
             Steps         = $results.ToArray()
@@ -3477,6 +3478,12 @@ $LPXaml = @'
           <Border x:Name="PnlStep4" CornerRadius="11" Padding="10,3" Cursor="Hand" ToolTip="Go to the result"><TextBlock x:Name="TxtStep4" Text="4  Sign out / restart"/></Border>
         </StackPanel>
         <TextBlock x:Name="TxtStepHint" Margin="18,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#1F3A5F" Text="Loading..."/>
+      </DockPanel>
+    </Border>
+    <Border DockPanel.Dock="Top" x:Name="PnlRestart" Visibility="Collapsed" Background="#FFF4E5" BorderBrush="#E65100" BorderThickness="0,0,0,2" Padding="16,8">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" x:Name="BtnRestart" Content="Restart now..." Margin="0" FontWeight="SemiBold" Background="#E65100" Foreground="White" BorderBrush="#BF360C" ToolTip="Asks again before restarting. Open programs are closed without saving."/>
+        <TextBlock x:Name="TxtRestart" VerticalAlignment="Center" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="#8A4B00" Margin="0,0,12,0"/>
       </DockPanel>
     </Border>
     <StatusBar DockPanel.Dock="Bottom">
@@ -3644,6 +3651,59 @@ $LPXaml = @'
   </DockPanel>
 </Window>
 '@
+
+# Shown after an Apply that needs a restart. "Restart later" is the default button (Enter and Esc), so
+# nobody restarts by accident; "Restart now" has to be clicked on purpose.
+$LPRestartXaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Language Profile - restart required" Width="640" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" FontFamily="Segoe UI" FontSize="13" Background="#FFFFFF"
+        FocusManager.FocusedElement="{Binding ElementName=DlgLater}">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#E65100" Padding="16,12">
+      <StackPanel>
+        <TextBlock Text="RESTART REQUIRED" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock x:Name="DlgWhy" Foreground="White" TextWrapping="Wrap" Margin="0,2,0,0"/>
+      </StackPanel>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Background="#F2F5F9" BorderBrush="#D5DDE8" BorderThickness="0,1,0,0" Padding="14,10">
+      <DockPanel LastChildFill="False">
+        <Button DockPanel.Dock="Right" x:Name="DlgLater" Content="Restart later" IsDefault="True" IsCancel="True" FontWeight="SemiBold" Padding="18,7" MinWidth="130"/>
+        <Button DockPanel.Dock="Right" x:Name="DlgRestartNow" Content="Restart now" Padding="18,7" MinWidth="130" Margin="0,0,10,0"/>
+      </DockPanel>
+    </Border>
+    <StackPanel Margin="16,12,16,12">
+      <TextBlock TextWrapping="Wrap" Margin="0,0,0,8" Text="The changes are saved, but they are only complete after a restart. Until then the lock screen and the language packs still show the old state."/>
+      <TextBlock TextWrapping="Wrap" Margin="0,0,0,12" Foreground="#B71C1C" FontWeight="SemiBold" Text="'Restart now' closes all open programs WITHOUT saving. Make sure the signed-in user has saved their work. 'Restart later' keeps everything open; restart the PC yourself when it suits."/>
+      <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+        <TextBlock x:Name="DlgResult" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Foreground="#263238"/>
+      </ScrollViewer>
+    </StackPanel>
+  </DockPanel>
+</Window>
+'@
+
+# Returns $true only when "Restart now" was clicked.
+function Show-LPRestartDialog {
+    param([string]$Reasons, [string]$Message)
+    [xml]$x = $LPRestartXaml
+    $dlg = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $x))
+    try { $dlg.Owner = $script:G.Window } catch { }
+    $dlg.FindName('DlgWhy').Text = $(if ($Reasons) { 'Needed because ' + $Reasons + '.' } else { 'Needed to finish the change.' })
+    $dlg.FindName('DlgResult').Text = $Message
+    $dlg.FindName('DlgRestartNow').Add_Click({ [System.Windows.Window]::GetWindow($this).DialogResult = $true })
+    return ($dlg.ShowDialog() -eq $true)
+}
+
+function Show-LPUiRestartBanner {
+    param([string]$Reasons)
+    $g = $script:G
+    $t = 'RESTART REQUIRED to finish'
+    if ($Reasons) { $t += ' (' + $Reasons + ')' }
+    $g.TxtRestart.Text = $t + '. Until then the lock screen and the language packs still show the old state.'
+    $g.PnlRestart.Visibility = 'Visible'
+}
 
 # Runs inside a background runspace: loads the engine and runs one unit of work.
 $LPBackgroundBootstrap = @'
@@ -4055,7 +4115,7 @@ function Set-LPUiBusy {
     param([bool]$Busy, [string]$Text)
     $g = $script:G
     $g.Busy = $Busy
-    foreach ($n in 'CmbPreset', 'BtnApplyStandard', 'CmbDisplay', 'TxtFormatFilter', 'CmbFormat', 'CmbGeo', 'TxtKbFilter', 'LstKbAvailable', 'LstKbSelected', 'BtnKbAdd', 'BtnKbRemove', 'BtnKbUp', 'BtnKbDown', 'PnlTargets', 'BtnRescan', 'ChkSync', 'ChkRdp', 'ChkSysLocale', 'ChkUninstall', 'TxtSource', 'BtnBrowseSource', 'BtnPreview', 'BtnStatusRefresh', 'BtnRestore', 'BtnRestoreRefresh') {
+    foreach ($n in 'CmbPreset', 'BtnApplyStandard', 'CmbDisplay', 'TxtFormatFilter', 'CmbFormat', 'CmbGeo', 'TxtKbFilter', 'LstKbAvailable', 'LstKbSelected', 'BtnKbAdd', 'BtnKbRemove', 'BtnKbUp', 'BtnKbDown', 'PnlTargets', 'BtnRescan', 'ChkSync', 'ChkRdp', 'ChkSysLocale', 'ChkUninstall', 'TxtSource', 'BtnBrowseSource', 'BtnPreview', 'BtnStatusRefresh', 'BtnRestore', 'BtnRestoreRefresh', 'BtnRestart') {
         $g[$n].IsEnabled = -not $Busy
     }
     if ($Busy) { $g.BtnApply.IsEnabled = $false; $g.BtnApplyReady.IsEnabled = $false }
@@ -4222,7 +4282,7 @@ function Start-LPUiApply {
             $signOut = @($Result.SignOut | Where-Object { $_ })
             if ('Error', 'Blocked', 'Cancelled' -contains $Result.Outcome) { Set-LPUiStep 3 ("Apply did not finish ({0}) - see the result below and the log. A backup is on the Restore tab." -f $Result.Outcome) }
             elseif ($Result.RestartNeeded) {
-                $h = 'Restart the PC to finish.'
+                $h = "Restart the PC to finish ('Restart now...' above, once the user has saved their work)."
                 if ($signOut.Count -gt 0) { $h += ' (A restart also signs out ' + ($signOut -join ', ') + '.)' }
                 if ($Result.Outcome -eq 'Partial') { $h = 'Partly applied - see what was skipped below. ' + $h }
                 Set-LPUiStep 4 $h
@@ -4234,8 +4294,9 @@ function Start-LPUiApply {
             $icon = 'Information'
             if ($Result.Outcome -eq 'Error' -or $Result.Outcome -eq 'Blocked') { $icon = 'Error' } elseif ($Result.Outcome -eq 'Partial' -or $Result.Outcome -eq 'Cancelled') { $icon = 'Warning' }
             if ($Result.RestartNeeded) {
-                $a = [System.Windows.MessageBox]::Show($msg + "`n`nRestart the PC now?", 'Language Profile', 'YesNo', $icon)
-                if ([string]$a -eq 'Yes') { Restart-Computer -Force; return }
+                $why = (@($Result.RestartReasons) -join ', ')
+                Show-LPUiRestartBanner $why
+                if (Show-LPRestartDialog -Reasons $why -Message $msg) { Restart-Computer -Force; return }
             }
             else { [System.Windows.MessageBox]::Show($msg, 'Language Profile', 'OK', $icon) | Out-Null }
         }
@@ -4461,6 +4522,11 @@ function Start-LPGui {
         })
     $g.BtnOpenLog.Add_Click({ Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\notepad.exe') -ArgumentList ('"{0}"' -f $script:G.CurrentLog) })
     $g.BtnApplyStandard.Add_Click({ Invoke-LPUiApplyStandard })
+    $g.BtnRestart.Add_Click({
+            if ($script:G.Bg) { return }
+            $a = [System.Windows.MessageBox]::Show("Restart the PC now?`n`nAll open programs are closed WITHOUT saving. Make sure the signed-in user has saved their work.", 'Language Profile - restart', 'YesNo', 'Warning', 'No')
+            if ([string]$a -eq 'Yes') { Restart-Computer -Force }
+        })
     $g.LstBackups.Add_SelectionChanged({ $script:G.BtnRestore.IsEnabled = ($null -ne $script:G.LstBackups.SelectedItem -and -not $script:G.Busy) })
     $g.BtnRestore.Add_Click({ Start-LPUiRestore })
     $g.BtnRestoreRefresh.Add_Click({ Update-LPUiBackups })
