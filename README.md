@@ -31,7 +31,7 @@ in mind. This README is the technical reference.
 | `LanguageProfile.cmd` | Launcher. Double-click for the GUI, or pass parameters for unattended mode. Uses 64-bit Windows PowerShell 5.1 even when started from a 32-bit process (Intune/SCCM). |
 | `LanguageProfile.ps1` | The tool. It contains the engine (no UI), the worker that runs inside a target account, the WPF front-end and the CLI. |
 | `presets.json` | Presets. IT can add more without touching code. |
-| `tools/Capture-RegistryDiff.cmd` / `.ps1` | **VM only.** Diffs the registry before and after the recipe, to confirm which keys Windows writes. Double-click the `.cmd` and pick a scenario; output goes to `C:\Users\Public\Documents\LanguageProfile-Diff`. |
+| `tools/Capture-RegistryDiff.cmd` / `.ps1` | Diffs the registry before and after a change, to confirm which keys Windows writes. Scenarios 1-4 run the recipe and change settings (**VM only**). Scenarios 5 and 6 only read: 5 = a change you make in Settings, 6 = wait until the regional format changes on its own. Double-click the `.cmd` and pick a scenario; output goes to `C:\Users\Public\Documents\LanguageProfile-Diff`. |
 | `tests/Engine.Tests.ps1`, `tests/Lint-PS51.ps1`, `tests/fixtures/` | Unit tests and static checks. They run in `pwsh` on any OS; the engine tests also run in Windows PowerShell 5.1. |
 | `tests/VM-TestPlan.md` | Acceptance tests for the "done means" list. |
 

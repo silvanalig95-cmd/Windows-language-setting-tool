@@ -20,6 +20,12 @@
                                  and diffs .DEFAULT, S-1-5-19, S-1-5-20, the Default profile hive and HKLM.
                                  Used to check that the tool's direct writes cover everything Windows writes.
       SystemPreferredUILanguage  Elevated. Diffs HKLM + .DEFAULT around Set-SystemPreferredUILanguage.
+      ManualChange               Run as the affected user. Reads HKCU, waits while you change something by hand
+                                 (e.g. Settings > Language & region > Regional format), reads it again and diffs.
+                                 Changes nothing itself.
+      WatchFormat                Run as the affected user. Reads HKCU, then waits until the regional format
+                                 (Control Panel\International\LocaleName) changes, notes the time and the processes
+                                 started shortly before, reads HKCU again and diffs. Changes nothing itself.
       Snapshot / Compare         Manual: -Scenario Snapshot -Name before ... (do something, e.g. in Settings)
                                  ... -Scenario Snapshot -Name after; then -Scenario Compare -Before <file> -After <file>.
 
@@ -40,7 +46,7 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('', 'Recipe', 'RecipeAsSystem', 'CopyToSystem', 'SystemPreferredUILanguage', 'Snapshot', 'Compare')][string]$Scenario = '',
+    [ValidateSet('', 'Recipe', 'RecipeAsSystem', 'CopyToSystem', 'SystemPreferredUILanguage', 'ManualChange', 'WatchFormat', 'Snapshot', 'Compare')][string]$Scenario = '',
     [string]$DisplayLanguage = 'en-US',
     [string]$RegionalFormat = 'de-CH',
     [int]$GeoId = 223,
@@ -66,16 +72,18 @@ $isAdmin = (New-Object Security.Principal.WindowsPrincipal($me)).IsInRole([Secur
 
 if (-not $Scenario) {
     Write-Host ''
-    Write-Host 'Language Profile - registry diff (VM ONLY: this changes language settings)' -ForegroundColor Yellow
+    Write-Host 'Language Profile - registry diff (1-4 change language settings: VM only; 5 and 6 only read)' -ForegroundColor Yellow
     Write-Host "Running as $($me.Name)$(if ($isAdmin) { ' (elevated)' } else { ' (not elevated)' })"
     Write-Host ''
     Write-Host '  1  Recipe                     run as the TEST USER, not elevated'
     Write-Host '  2  RecipeAsSystem             needs admin (asks for elevation)'
     Write-Host '  3  CopyToSystem               needs admin; run 1 in that admin account first'
     Write-Host '  4  SystemPreferredUILanguage  needs admin, Windows 11'
+    Write-Host '  5  ManualChange               as the affected user: you change something in Settings, the tool diffs it'
+    Write-Host '  6  WatchFormat                as the affected user: waits until the regional format changes, then diffs'
     Write-Host ''
-    $choice = Read-Host 'Scenario (1-4)'
-    $Scenario = @{ '1' = 'Recipe'; '2' = 'RecipeAsSystem'; '3' = 'CopyToSystem'; '4' = 'SystemPreferredUILanguage' }[$choice.Trim()]
+    $choice = Read-Host 'Scenario (1-6)'
+    $Scenario = @{ '1' = 'Recipe'; '2' = 'RecipeAsSystem'; '3' = 'CopyToSystem'; '4' = 'SystemPreferredUILanguage'; '5' = 'ManualChange'; '6' = 'WatchFormat' }[$choice.Trim()]
     if (-not $Scenario) { Write-Host 'No scenario selected.' -ForegroundColor Red; Wait-Close; exit 1 }
 }
 
@@ -245,6 +253,29 @@ function Write-Diff([string[]]$BeforeLines, [string[]]$AfterLines, [string]$Titl
     $script:written = @("${base}_diff.txt", "${base}_keys.txt")
 }
 
+# Current regional format and "follow the display language" switch of this account (read-only).
+function Get-FormatState {
+    $loc = ''; $opt = '(missing)'
+    $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Control Panel\International', $false)
+    if ($k) { try { $loc = [string]$k.GetValue('LocaleName', '') } finally { $k.Close() } }
+    $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Control Panel\International\User Profile', $false)
+    if ($k) { try { $opt = [string]$k.GetValue('UserLocaleFromLanguageProfileOptOut', '(missing)') } finally { $k.Close() } }
+    $settingsOpen = @(Get-Process -Name SystemSettings -ErrorAction SilentlyContinue).Count -gt 0
+    return [pscustomobject]@{ LocaleName = $loc; OptOut = $opt; SettingsOpen = $settingsOpen }
+}
+function Write-FormatState([string]$When) {
+    $f = Get-FormatState
+    Write-Step ("{0}: regional format {1}, UserLocaleFromLanguageProfileOptOut = {2}, Settings app open: {3}" -f $When, $f.LocaleName, $f.OptOut, $f.SettingsOpen)
+    try { Write-Host ('  Get-WinCultureFromLanguageListOptOut: ' + (Get-WinCultureFromLanguageListOptOut)) } catch { }
+    try { Write-Host ('  Language list: ' + ((Get-WinUserLanguageList | ForEach-Object { $_.LanguageTag + ' [' + (@($_.InputMethodTips) -join ', ') + ']' }) -join '; ')) } catch { }
+    try {
+        $sync = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language' -ErrorAction Stop
+        Write-Host ('  SettingSync\Groups\Language\Enabled: ' + $sync.Enabled)
+    }
+    catch { Write-Host '  SettingSync\Groups\Language\Enabled: (not set)' }
+    return $f
+}
+
 $sel = New-LPSelection -DisplayLanguage $DisplayLanguage -RegionalFormat $RegionalFormat -GeoId $GeoId -Keyboards $Keyboard -TargetIds @()
 
 switch ($Scenario) {
@@ -255,6 +286,51 @@ switch ($Scenario) {
         [IO.File]::WriteAllLines($file, [string[]](Get-Dump $areas))
         Write-Step "Snapshot written: $file" 'Green'
         $script:written = @($file)
+    }
+    'ManualChange' {
+        Write-Step "Reads the account running this window: $($me.Name). Run it as the affected user." 'Yellow'
+        $null = Write-FormatState 'Before'
+        Write-Step 'Reading the registry BEFORE (can take 1-3 minutes, please wait)...'
+        $dumpBefore = Get-Dump @('HKCU')
+        Write-Host ''
+        Write-Host 'Now make the change by hand, for example:' -ForegroundColor Yellow
+        Write-Host '  Settings > Time & language > Language & region > Regional format: German (Switzerland)' -ForegroundColor Yellow
+        Write-Host 'Then come back to this window.' -ForegroundColor Yellow
+        [void](Read-Host 'Press Enter when the change is done')
+        Start-Sleep -Seconds 3
+        $null = Write-FormatState 'After'
+        Write-Step 'Reading the registry AFTER (can take 1-3 minutes)...'
+        $dumpAfter = Get-Dump @('HKCU')
+        Write-Diff $dumpBefore $dumpAfter 'Manual change (e.g. in Settings) by the current user'
+    }
+    'WatchFormat' {
+        Write-Step "Reads the account running this window: $($me.Name). Run it as the affected user." 'Yellow'
+        $start = Write-FormatState 'Start'
+        Write-Step 'Reading the registry (can take 1-3 minutes, please wait)...'
+        $dumpBefore = Get-Dump @('HKCU')
+        $minutes = 45
+        Write-Step "Watching the regional format ($($start.LocaleName)) for up to $minutes minutes. Leave this window open; Ctrl+C stops." 'Green'
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $changed = $null
+        $lastBeat = 0
+        while ($sw.Elapsed.TotalMinutes -lt $minutes) {
+            Start-Sleep -Seconds 2
+            $now = Get-FormatState
+            if ($now.LocaleName -ne $start.LocaleName -or $now.OptOut -ne $start.OptOut) { $changed = Get-Date; break }
+            if ([int]$sw.Elapsed.TotalMinutes -gt $lastBeat) { $lastBeat = [int]$sw.Elapsed.TotalMinutes; Write-Host ("  {0:HH:mm} still {1}" -f (Get-Date), $now.LocaleName) }
+        }
+        if ($changed) {
+            Write-Step ("CHANGED at {0:HH:mm:ss} (within the last 2 seconds)" -f $changed) 'Yellow'
+            $null = Write-FormatState 'Now'
+            Write-Host '  Processes started in the 3 minutes before the change:'
+            foreach ($pr in @(Get-Process -ErrorAction SilentlyContinue | Sort-Object Id)) {
+                try { if ($pr.StartTime -gt $changed.AddMinutes(-3)) { Write-Host ('    {0:HH:mm:ss}  {1} (PID {2})' -f $pr.StartTime, $pr.ProcessName, $pr.Id) } } catch { }
+            }
+        }
+        else { Write-Step "No change within $minutes minutes." 'Yellow' }
+        Write-Step 'Reading the registry AFTER (can take 1-3 minutes)...'
+        $dumpAfter = Get-Dump @('HKCU')
+        Write-Diff $dumpBefore $dumpAfter 'Watch: what changed in HKCU while the regional format changed'
     }
     'Compare' {
         if (-not $Before -or -not $After) { throw 'Use -Before <file> -After <file>.' }
