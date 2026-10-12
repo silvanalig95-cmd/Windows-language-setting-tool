@@ -95,7 +95,8 @@ param(
     [switch]$Gui,
     [ValidateRange(1, 120)][int]$TaskTimeoutMinutes = 10,
     [switch]$Elevated,
-    [string]$LaunchedFrom
+    [string]$LaunchedFrom,
+    [int]$LauncherPid = 0
 )
 
 # ------------------------------------------------------------------------------------------------
@@ -4374,6 +4375,32 @@ function Hide-LPConsole {
     catch { }
 }
 
+# Brings the window to the front once the launcher console has closed. When that console closes, Windows
+# activates the window behind it (usually Explorer), which covers the tool if Windows did not let the tool
+# become the active window. Topmost on and off raises it even then; Activate() takes the focus when allowed.
+function Start-LPUiRaise {
+    $g = $script:G
+    $g.RaiseTicks = 0
+    $g.LauncherGone = 0
+    $t = New-Object System.Windows.Threading.DispatcherTimer
+    $t.Interval = [TimeSpan]::FromMilliseconds(250)
+    $t.Add_Tick({
+            $g = $script:G
+            $g.RaiseTicks++
+            $alive = $false
+            if ($script:LPLauncherPid -gt 0) { $alive = $null -ne (Get-Process -Id $script:LPLauncherPid -ErrorAction SilentlyContinue) }
+            if (-not $alive) { $g.LauncherGone++ }
+            # Wait until the launcher is gone plus one tick for its console to close (at most 10 s).
+            if ($g.LauncherGone -lt 2 -and $g.RaiseTicks -lt 40) { return }
+            $this.Stop()
+            if (-not $g.Window.IsActive) {
+                try { $g.Window.Topmost = $true; $g.Window.Topmost = $false; [void]$g.Window.Activate() } catch { }
+                Write-LPLog 'Window brought to the front after the launcher closed.' -Level Detail
+            }
+        })
+    $t.Start()
+}
+
 # Loads the lists (presets, formats, countries, keyboard layouts) and selects the initial preset. Runs
 # after the window is visible, so the window appears quickly.
 function Initialize-LPUiLists {
@@ -4547,11 +4574,15 @@ function Start-LPGui {
             $g = $script:G
             if ($g.Started) { return }
             $g.Started = $true
+            # Bring the window to the front: Topmost on and off raises it above other windows even when
+            # Windows refuses to make it the active window; Activate() takes the focus when allowed.
+            try { $g.Window.Topmost = $true; $g.Window.Topmost = $false; [void]$g.Window.Activate() } catch { }
             Write-LPLog ('Window shown {0} after the start.' -f (Get-LPUiElapsed)) -Level Detail
             try { Initialize-LPUiLists -InitialPreset $g.InitialPreset }
             catch { [System.Windows.MessageBox]::Show("Loading the lists failed:`n`n$($_.Exception.Message)", 'Language Profile', 'OK', 'Error') | Out-Null }
             Write-LPLog ('Lists loaded {0} after the start.' -f (Get-LPUiElapsed)) -Level Detail
             Start-LPUiScan -ClearStale
+            Start-LPUiRaise
             # Started directly as administrator: hide the console window (the elevated launch is hidden already).
             if (-not $g.ConsoleHidden) { Hide-LPConsole }
         })
@@ -4690,6 +4721,7 @@ function Invoke-LPCli {
 $script:LPScriptRoot = $PSScriptRoot
 $script:LPEngineText = $LPEngineScript.ToString()
 $script:LPLaunchedFrom = $LaunchedFrom
+$script:LPLauncherPid = $LauncherPid
 
 function ConvertTo-LPQuotedArg {
     param([string]$Value)
@@ -4839,6 +4871,7 @@ if (-not $isAdmin) {
     # the user's drive mappings and usually has no access to the share. Copy the tool to the local disk as
     # the user first; the elevated side verifies that copy (Get-LPLaunchBootstrap) before running it.
     $fwd = @(Get-LPForwardArgs $bound) + '-Elevated'
+    if (-not $isCli) { $fwd += @('-LauncherPid', [string]$PID) }
     $stage = $null
     $argLine = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-LPQuotedArg $PSCommandPath) + ' ' + ((@($fwd) | ForEach-Object { ConvertTo-LPQuotedArg $_ }) -join ' ')
     if (Test-LPNetworkPath $PSCommandPath) {
@@ -4870,6 +4903,22 @@ if (-not $isAdmin) {
     # visible, and report it if it stops before that instead of failing silently.
     Write-Host -NoNewline 'Starting Language Profile, the window opens in a few seconds '
     $sw = [Diagnostics.Stopwatch]::StartNew()
+    # Foreground: a process started through the UAC prompt is not allowed to take the foreground, so its
+    # window would open inactive, and when this console closes Windows activates the window behind it
+    # (usually Explorer), which then covers the tool. This console still owns the foreground: allow the
+    # elevated process to take it, and hand it to its window once that is visible.
+    $fg = $null
+    try {
+        if (-not ('LanguageProfileLauncher.Win32' -as [type])) {
+            Add-Type -Namespace LanguageProfileLauncher -Name Win32 -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(int dwProcessId);
+[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);
+'@
+        }
+        $fg = [LanguageProfileLauncher.Win32]
+        if ($proc) { [void]$fg::AllowSetForegroundWindow($proc.Id) }
+    }
+    catch { $fg = $null }
     try {
         while ($proc -and $sw.Elapsed.TotalSeconds -lt 120) {
             if ($proc.HasExited) {
@@ -4881,9 +4930,15 @@ if (-not $isAdmin) {
                 break
             }
             $proc.Refresh()
-            if ($proc.MainWindowHandle -ne [IntPtr]::Zero) { break }
+            if ($proc.MainWindowHandle -ne [IntPtr]::Zero) {
+                if ($fg) {
+                    [void]$fg::SetForegroundWindow($proc.MainWindowHandle)
+                    Start-Sleep -Milliseconds 200
+                }
+                break
+            }
             Write-Host -NoNewline '.'
-            Start-Sleep -Milliseconds 500
+            Start-Sleep -Milliseconds 250
         }
         # The elevated side copies the staged files right after the start; by now they are not needed.
         if ($stage -and ($proc.HasExited -or $proc.MainWindowHandle -ne [IntPtr]::Zero)) { [IO.Directory]::Delete($stage.Dir, $true) }

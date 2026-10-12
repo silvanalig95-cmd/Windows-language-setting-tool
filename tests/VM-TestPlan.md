@@ -53,6 +53,8 @@ If a run fails, the transcript contains the error.
 - [ ] `LanguageProfile.cmd -Preset Standard -Preview` shows readiness and preview and changes nothing. Exit code: 0 when ready, 2 when blocked.
 - [ ] GUI opens. Standard is preselected and the readiness panel updates when fields change.
   - While it starts, the launcher window shows "Starting Language Profile..." until the tool window is visible.
+  - The tool window opens in front and stays in front after the launcher window closes (also when started
+    as a standard user with admin credentials, and from Windows Terminal).
   - The tool window shows "Loading..." with a moving bar at the bottom right until the scan is done.
   - The session log has "Window shown ... after the start" and "Scan took ..." lines. Please send these timings.
 - [ ] Restart prompt (after an Apply that needs a restart): the orange "RESTART REQUIRED" dialog
