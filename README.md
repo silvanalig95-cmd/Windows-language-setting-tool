@@ -47,18 +47,55 @@ Requirements:
    - country/region **Switzerland (223)**;
    - keyboard **Swiss German 00000807** on en-US (tip `0409:00000807`).
 3. Click **Apply standard setup**. This:
-   - resets the targets to the default (signed-in user(s), lock screen, new users);
+   - resets the targets and options to the default (signed-in user(s), lock screen, new users;
+     uninstall the other language packs);
    - runs the readiness check;
-   - shows one confirmation with a summary, then applies.
+   - shows one confirmation with a summary, then applies. The summary names the language packs that
+     will be uninstalled.
 
    If something is BLOCKED, nothing is changed and the readiness list says what to do.
 4. The result tells you who must sign out and whether a restart is needed.
+
+Step by step instead of one click: the bar below the preset shows where you are, with a one-line hint
+for the next step:
+
+**1 Choose settings** > **2 Preview changes** > **3 Apply** > **4 Sign out / restart**
+
+- On the Configure tab, the blue **Next: Preview changes** button is always visible at the bottom right,
+  next to the readiness summary.
+- The preview has a **Back to settings** button and the blue **Apply these changes** button.
+- The steps can be clicked to jump between the tabs. Nothing is changed before the confirmation.
+
+**Uninstall other language packs** is on by default. The orange box under Options lists the packs that
+will be removed on this PC (for example "English (United Kingdom) [en-GB]"). It is also a WARNING item in
+the readiness list and in the confirmation. Untick it to keep the packs; Apply removes the other languages
+from the language lists of the selected accounts either way.
 
 Tabs:
 - **Configure**: preset, fields, targets, options and the live readiness panel.
 - **Status**: read-only state of every profile, including hidden layouts, re-add risks and policies.
 - **Preview and apply**: exactly what will be installed, set and removed, per target, plus the live log.
 - **Restore**: lists the backups.
+
+### Starting from a network folder
+Double-click `LanguageProfile.cmd` in the network folder (mapped drive or `\\server\share`) and enter
+the admin credentials. Don't use "Run as administrator" on a mapped drive: the admin account can't see
+the drive mappings of the signed-in user.
+
+The elevated admin account usually can't see the user's mapped drives or read the share. So the tool
+handles it like this:
+1. Before the UAC prompt, the tool copies itself into the user's temp folder (`%TEMP%\LanguageProfile-Launch`),
+   as the user, and records the SHA-256 of every file.
+2. After the UAC prompt, the elevated part copies those files into a new folder under
+   `C:\Windows\Temp` that only SYSTEM and Administrators can write to. It checks every file against the
+   recorded hash, then starts that copy. A file changed in between stops the start with a message.
+3. Both copies are deleted afterwards.
+
+The session log names the network folder it was started from.
+
+While the elevated part starts, the launcher window shows "Starting Language Profile..." until the
+tool window is visible. If the elevated part stops before that, the launcher shows its exit code.
+The session log records how long the window, the lists and the first scan took.
 
 ## Command line (Intune / SCCM / SYSTEM)
 
@@ -80,7 +117,8 @@ LanguageProfile.cmd -DisplayLanguage en-US -RegionalFormat de-CH -GeoId 223 -Key
 | `-KeepLanguageSync` | Do not disable language sync (default: disabled). |
 | `-AllowRemoteKeyboardLayout` | Do not set `IgnoreRemoteKeyboardLayout=1` (default: set). |
 | `-SetSystemLocale [-SystemLocale xx-XX]` | Also set the system locale for non-Unicode programs. Restart needed. |
-| `-UninstallOtherLanguages` | Uninstall all other language packs. The display language being applied is never removed. |
+| `-KeepOtherLanguages` | Do not uninstall the other display language packs. By default they are uninstalled, the same as in the GUI. The display language being applied is never removed, and the languages are removed from the language lists either way. |
+| `-UninstallOtherLanguages` | Uninstall the other language packs even if the preset has `"uninstallOtherLanguages": false`. |
 | `-LanguageSource <folder>` | Folder with `Microsoft-Windows-Client-Language-Pack_x64_<tag>.cab` from the Languages and Optional Features ISO. When given, the pack is installed from there (DISM) instead of Windows Update/WSUS. |
 | `-ApplyReadyParts` | If something is blocked, apply only the parts that are ready (exit code 4). |
 | `-TaskTimeoutMinutes` | How long to wait for the per-user task (default 10). |
@@ -112,8 +150,12 @@ LanguageProfile.cmd -DisplayLanguage en-US -RegionalFormat de-CH -GeoId 223 -Key
 ```
 
 - Required fields: `name`, `displayLanguage`, `regionalFormat`, `keyboards` (8-hex-digit layout IDs).
-- Optional fields: `geoId` (default: the region of the format), `description`, `systemLocale`
-  (used when "set system locale" is on; default: the format).
+- Optional fields:
+  - `geoId` (default: the region of the format);
+  - `description`;
+  - `systemLocale` (used when "set system locale" is on; default: the format);
+  - `uninstallOtherLanguages` (`true` or `false`, default `true`): the preselected state of
+    "Uninstall other language packs" in the GUI, and the CLI default for this preset.
 - Invalid presets are skipped with a warning.
 - If `Standard` is missing or the file is unreadable, a built-in Standard preset is used, so the
   one-click path always works.
@@ -239,7 +281,8 @@ Every item shows **OK**, **AUTOMATIC** (will be added automatically), **WARNING*
 | Pending restart | BLOCKED if a pack must be installed or removed ("restart first"); otherwise a warning. |
 | GPO/Intune policies | Read from `Software\Policies\Microsoft\Control Panel\International` (HKLM and every target), `...\Control Panel\Desktop` (PreferredUILanguages, MultiUILanguageID), `HKLM\SOFTWARE\Policies\Microsoft\MUI\Settings` and Intune's `PolicyManager\current\device\TimeLanguageSettings`. Policies that would override the result are BLOCKED, with the policy path, the GPMC setting name, and who must change it (gpresult / Intune profiles). The tool never changes policies. |
 | Targets | Each target shows how it will be written. Task Scheduler must run for signed-in users. |
-| Options | Sync, RDP, system locale (restart and legacy-app warning), uninstall (warns about non-selected users who would lose their display language). |
+| Options | Sync, RDP, system locale (restart and legacy-app warning). |
+| Uninstall other language packs (on by default) | WARNING that names the packs to be removed and the non-selected users who would lose their display language. Without `Uninstall-Language` (older Windows 10) it is a WARNING too: the packs stay installed, everything else is applied. |
 | Optional features | INFO: not required, not installed, not an error. |
 
 If anything is BLOCKED, Apply changes **nothing**. "Apply only the parts that are ready"
@@ -362,6 +405,6 @@ the results go to `C:\Users\Public\Documents\LanguageProfile-Diff`.
 ## Development
 ```
 pwsh -File tests/Lint-PS51.ps1        # parse, PS 5.1 compatibility, ASCII-only, XAML names
-pwsh -File tests/Engine.Tests.ps1     # 108 engine tests; registry logic runs against a fake registry
+pwsh -File tests/Engine.Tests.ps1     # 127 engine tests; registry logic runs against a fake registry
                                       # loaded with real Windows 11 25H2 data (tests/fixtures)
 ```

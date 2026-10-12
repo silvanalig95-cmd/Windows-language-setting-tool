@@ -39,7 +39,10 @@
 .PARAMETER SetSystemLocale
     Also set the system locale for non-Unicode programs (restart needed). Uses -SystemLocale or the regional format.
 .PARAMETER UninstallOtherLanguages
-    Uninstall every other installed language pack (never the display language being applied).
+    Uninstall every other installed display language pack (never the display language being applied).
+    This is the default; the switch only overrides a preset with "uninstallOtherLanguages": false.
+.PARAMETER KeepOtherLanguages
+    Do not uninstall the other display language packs (they are still removed from the language lists).
 .PARAMETER LanguageSource
     Folder that contains the language pack CAB from the "Languages and Optional Features" ISO.
     When set, the pack is installed from there (DISM) instead of Windows Update/WSUS.
@@ -80,6 +83,7 @@ param(
     [switch]$SetSystemLocale,
     [string]$SystemLocale,
     [switch]$UninstallOtherLanguages,
+    [switch]$KeepOtherLanguages,
     [string]$LanguageSource,
     [switch]$ApplyReadyParts,
     [switch]$Preview,
@@ -90,7 +94,8 @@ param(
     [switch]$NoUI,
     [switch]$Gui,
     [ValidateRange(1, 120)][int]$TaskTimeoutMinutes = 10,
-    [switch]$Elevated
+    [switch]$Elevated,
+    [string]$LaunchedFrom
 )
 
 # ------------------------------------------------------------------------------------------------
@@ -133,6 +138,7 @@ $LPEngineScript = {
         geoId           = 223
         keyboards       = @('00000807')
         systemLocale    = $null
+        uninstallOtherLanguages = $true
     }
 
     # The registry keys the tool replaces in every user-type hive (target users, HKU\.DEFAULT,
@@ -395,6 +401,27 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         try { return [Globalization.CultureInfo]::GetCultureInfo($Name.Trim()) } catch { return $null }
     }
 
+    # "English (United Kingdom) [en-GB], German (Germany) [de-DE]"
+    function Format-LPLanguageNames {
+        param([string[]]$Tags)
+        $names = foreach ($t in @($Tags)) {
+            if (-not $t) { continue }
+            $c = Get-LPCultureInfo $t
+            if ($c -and $c.EnglishName) { '{0} [{1}]' -f $c.EnglishName, $t } else { $t }
+        }
+        return (@($names) -join ', ')
+    }
+
+    # Installed display language packs other than the one being applied (and other than the system UI
+    # language when that is kept because the lock screen is not a target).
+    function Get-LPOtherLanguagePacks {
+        param($Snapshot, [string]$DisplayLanguage, [bool]$KeepSystemUILanguage)
+        if (-not $Snapshot -or -not $Snapshot.Languages) { return @() }
+        $keep = @($DisplayLanguage)
+        if ($KeepSystemUILanguage -and $Snapshot.Languages.SystemPreferredUILanguage) { $keep += $Snapshot.Languages.SystemPreferredUILanguage }
+        return @($Snapshot.Languages.Installed | Where-Object { $_ -and $keep -notcontains $_ })
+    }
+
     function Get-LPLcid {
         param([string]$Tag)
         $c = Get-LPCultureInfo $Tag
@@ -580,7 +607,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                     $text = [string]$k.GetValue('Layout Text', '')
                     $file = [string]$k.GetValue('Layout File', '')
                     $fileOk = $true
-                    if ($file) { $fileOk = Test-Path -LiteralPath (Join-Path $env:SystemRoot "System32\$file") }
+                    if ($file) { $fileOk = [IO.File]::Exists((Join-Path $env:SystemRoot "System32\$file")) }
                     if (-not $text) { $text = "Layout $id" }
                     $list.Add([pscustomobject]@{ Id = $id.ToUpperInvariant(); Name = $text; File = $file; FileExists = $fileOk; Display = ('{0}  ({1})' -f $text, $id.ToUpperInvariant()) })
                 }
@@ -634,7 +661,10 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                     if ($p.PSObject.Properties['description'] -and $p.description) { $desc = [string]$p.description }
                     $sysLoc = $null
                     if ($p.PSObject.Properties['systemLocale'] -and $p.systemLocale) { $sysLoc = [string]$p.systemLocale }
-                    $result.Add([pscustomobject]@{ name = [string]$p.name; description = $desc; displayLanguage = [string]$p.displayLanguage; regionalFormat = [string]$p.regionalFormat; geoId = $geo; keyboards = $kb; systemLocale = $sysLoc })
+                    # Uninstalling the other language packs is the default; a preset can switch it off.
+                    $uninstall = $true
+                    if ($p.PSObject.Properties['uninstallOtherLanguages']) { $uninstall = [bool]$p.uninstallOtherLanguages }
+                    $result.Add([pscustomobject]@{ name = [string]$p.name; description = $desc; displayLanguage = [string]$p.displayLanguage; regionalFormat = [string]$p.regionalFormat; geoId = $geo; keyboards = $kb; systemLocale = $sysLoc; uninstallOtherLanguages = $uninstall })
                 }
             }
             catch { $warnings.Add("presets.json could not be read: $($_.Exception.Message)") }
@@ -660,6 +690,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             $g = 0
             if (-not [int]::TryParse([string]$p.geoId, [ref]$g)) { return "geoId '$($p.geoId)' is not a number" }
         }
+        if ($p.PSObject.Properties['uninstallOtherLanguages'] -and $p.uninstallOtherLanguages -isnot [bool]) { return "uninstallOtherLanguages must be true or false" }
         return $null
     }
 
@@ -2000,18 +2031,21 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             else { & $add 'syslocale' "System locale will be set to $($sl.Name) (was $($Snapshot.Languages.SystemLocale))" 'Auto' @('Needs a restart. Programs that are not Unicode may show garbled text if they expect another code page.') $null $null }
         }
         if ($Selection.UninstallOthers) {
-            $keep = @($disp)
-            if (-not $wantLock -and $Snapshot.Languages.SystemPreferredUILanguage) { $keep += $Snapshot.Languages.SystemPreferredUILanguage }
-            $remove = @($langs.Installed | Where-Object { $keep -notcontains $_ })
+            $remove = @(Get-LPOtherLanguagePacks -Snapshot $Snapshot -DisplayLanguage $disp -KeepSystemUILanguage (-not $wantLock))
+            $removeText = Format-LPLanguageNames $remove
             if ($remove.Count -eq 0) {
-                & $add 'uninstall' 'Uninstall other language packs: there are none - en-US is the only display language pack on this PC' 'OK' @(
+                & $add 'uninstall' ('Uninstall other language packs: there are none - {0} is the only display language pack on this PC' -f $disp) 'OK' @(
                     'A display language pack is the translated Windows interface (Settings shows "language pack" under the language). Languages that are only in a language list, for example English (United Kingdom) without a pack, are not packs. The profile removes them from the lists of the selected accounts anyway (see the preview).') $null $null
             }
             elseif (-not $caps.UninstallLanguage) {
-                & $add 'uninstall' ('Other language packs (' + ($remove -join ', ') + ') cannot be removed automatically') 'Blocked' @('Uninstall-Language is not available on this Windows version.') @('Settings > Time & language > Language & region > (language) > Remove, or IT: DISM /Online /Remove-Package for the language pack package.') @('uninstall')
+                # Not a blocker: the packs only stay installed. The language lists are cleaned up anyway.
+                & $add 'uninstall' ('Other language packs cannot be uninstalled automatically on this Windows version and stay installed: ' + $removeText) 'Warn' @(
+                    'Uninstall-Language is not available here. Everything else is applied; the languages are still removed from the language lists of the selected accounts.') @(
+                    'Settings > Time & language > Language & region > (language) > Remove, or IT: DISM /Online /Remove-Package for the language pack package.') $null
             }
             else {
-                $d = @('Not rolled back by Restore. Needs a restart. Windows may refuse to remove the language it was installed with; that is reported, not fatal.')
+                $d = @('Display language packs (translated Windows interface) are removed for the whole PC - for ALL users, also those not selected. Untick "Uninstall other language packs" to keep them; the languages are removed from the lists of the selected accounts anyway.',
+                    'Not rolled back by Restore. Needs a restart. Windows may refuse to remove the language it was installed with; that is reported, not fatal.')
                 $users = @()
                 foreach ($p in $Snapshot.Profiles) {
                     if (@($Selection.TargetIds) -contains $p.Id) { continue }
@@ -2019,8 +2053,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
                 }
                 if ($users.Count -gt 0) { $d += ('These NOT selected users use one of them as display language and will fall back: ' + ($users -join ', ')) }
                 if (-not $wantLock) { $d += "The system UI language $($Snapshot.Languages.SystemPreferredUILanguage) is kept because the lock screen is not selected." }
-                $d = @('Display language packs (translated Windows interface) are removed for the whole PC. Languages that are only in a language list are removed from the selected accounts anyway.') + $d
-                & $add 'uninstall' ('Display language packs to uninstall: ' + ($remove -join ', ')) 'Auto' $d $null $null
+                & $add 'uninstall' ('These display language packs will be UNINSTALLED from this PC: ' + $removeText) 'Warn' $d $null $null
             }
         }
         if ($sp.Count -gt 0) {
@@ -2401,14 +2434,14 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if ($needsReference -and -not (& $has 'lockscreen')) {
             $steps.Add([pscustomobject]@{ Kind = 'RestoreReference'; Part = 'lockscreen'; Title = 'Restore the lock screen (it was only used as reference)' })
         }
-        if (& $has 'uninstall') {
+        if ((& $has 'uninstall') -and $Snapshot.Capabilities.UninstallLanguage) {
             $keep = @($Selection.DisplayLanguage)
             if (-not (& $has 'lockscreen') -and $sysUi) { $keep += $sysUi }
             $remove = @($Snapshot.Languages.Installed | Where-Object { $keep -notcontains $_ })
             if ($remove.Count -gt 0) {
                 $steps.Add([pscustomobject]@{ Kind = 'Uninstall'; Part = 'uninstall'; Title = 'Uninstall other language packs'; Languages = $remove })
                 $lines.Add((New-LPLine 'Heading2' 'Language packs'))
-                foreach ($r in $remove) { $lines.Add((New-LPLine 'Remove' "Language pack $r (Uninstall-Language)")) }
+                foreach ($r in $remove) { $lines.Add((New-LPLine 'Remove' ('Language pack {0} (Uninstall-Language, whole PC)' -f (Format-LPLanguageNames @($r))))) }
                 $restart.Add('language packs were removed')
             }
         }
@@ -2444,6 +2477,10 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $txt = "Display language: $($s.DisplayLanguage)`nRegional format: $($s.RegionalFormat) / GeoId $($s.GeoId)`nKeyboard(s): $(@($s.Keyboards) -join ', ')`n`nApply to: $(if ($who.Count) { $who -join ', ' } else { '(machine options only)' })"
         if (@($Plan.Steps | Where-Object { $_.Kind -eq 'InstallPack' }).Count -gt 0) { $txt += "`n`nThe display language pack will be installed first (can take 10+ minutes)." }
         if ($Plan.ReadyPartsOnly -and @($Plan.SkippedParts).Count -gt 0) { $txt += "`n`nPARTIAL: blocked parts are skipped and stay unchanged." }
+        $un = @($Plan.Steps | Where-Object { $_.Kind -eq 'Uninstall' } | Select-Object -First 1)
+        if ($un.Count -gt 0) {
+            $txt += "`n`nUNINSTALLS these display language packs from the whole PC (all users): " + (Format-LPLanguageNames @($un[0].Languages)) + ". Restore does not bring them back. To keep them, click No and untick 'Uninstall other language packs'."
+        }
         $txt += "`n`nAll other languages and keyboards are removed from these places. A backup is made first."
         return $txt
     }
@@ -3425,14 +3462,36 @@ $LPXaml = @'
         <TextBlock Grid.Column="0" Text="Preset" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <ComboBox Grid.Column="1" x:Name="CmbPreset" VerticalAlignment="Center"/>
         <TextBlock Grid.Column="2" x:Name="TxtPresetInfo" VerticalAlignment="Center" Margin="12,0" Foreground="#4A5A6A" TextWrapping="Wrap"/>
-        <Button Grid.Column="3" x:Name="BtnApplyStandard" Content="Apply standard setup" FontSize="15" FontWeight="SemiBold" Padding="22,9" Margin="0" Background="#2E7D32" Foreground="White" BorderBrush="#1B5E20" IsEnabled="False"/>
+        <Button Grid.Column="3" x:Name="BtnApplyStandard" Content="Apply standard setup" FontSize="15" FontWeight="SemiBold" Padding="22,9" Margin="0" Background="#2E7D32" Foreground="White" BorderBrush="#1B5E20" IsEnabled="False" ToolTip="One click: Standard preset with the default options and targets, confirm, apply. Same as LanguageProfile.cmd -Preset Standard."/>
       </Grid>
     </Border>
+    <Border DockPanel.Dock="Top" Background="#FFFFFF" BorderBrush="#D5DDE8" BorderThickness="0,0,0,1" Padding="16,8">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <Border x:Name="PnlStep1" CornerRadius="11" Padding="10,3" Cursor="Hand" ToolTip="Go to the settings"><TextBlock x:Name="TxtStep1" Text="1  Choose settings"/></Border>
+          <TextBlock Text="&gt;" Margin="6,0" VerticalAlignment="Center" Foreground="#9AA5B1"/>
+          <Border x:Name="PnlStep2" CornerRadius="11" Padding="10,3" Cursor="Hand" ToolTip="Go to the preview"><TextBlock x:Name="TxtStep2" Text="2  Preview changes"/></Border>
+          <TextBlock Text="&gt;" Margin="6,0" VerticalAlignment="Center" Foreground="#9AA5B1"/>
+          <Border x:Name="PnlStep3" CornerRadius="11" Padding="10,3" Cursor="Hand" ToolTip="Go to the preview and the log"><TextBlock x:Name="TxtStep3" Text="3  Apply"/></Border>
+          <TextBlock Text="&gt;" Margin="6,0" VerticalAlignment="Center" Foreground="#9AA5B1"/>
+          <Border x:Name="PnlStep4" CornerRadius="11" Padding="10,3" Cursor="Hand" ToolTip="Go to the result"><TextBlock x:Name="TxtStep4" Text="4  Sign out / restart"/></Border>
+        </StackPanel>
+        <TextBlock x:Name="TxtStepHint" Margin="18,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="#1F3A5F" Text="Loading..."/>
+      </DockPanel>
+    </Border>
     <StatusBar DockPanel.Dock="Bottom">
+      <StatusBarItem DockPanel.Dock="Right"><ProgressBar x:Name="PrgBusy" Width="160" Height="12" IsIndeterminate="True" Visibility="Visible"/></StatusBarItem>
       <StatusBarItem><TextBlock x:Name="TxtStatusBar" Text="Starting..."/></StatusBarItem>
     </StatusBar>
     <TabControl x:Name="Tabs" Margin="10">
       <TabItem Header="  Configure  " x:Name="TabConfigure">
+        <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#F2F5F9" BorderBrush="#D5DDE8" BorderThickness="1" CornerRadius="4" Padding="12,8" Margin="6,6,6,2">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" x:Name="BtnPreview" Content="Next: Preview changes  &gt;" FontSize="14" FontWeight="SemiBold" Padding="20,8" Margin="0" Background="#1565C0" Foreground="White" BorderBrush="#0D47A1" IsEnabled="False" ToolTip="Shows exactly what will change. Nothing is changed yet."/>
+            <TextBlock x:Name="TxtConfigFooter" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,14,0" Foreground="#4A5A6A" Text="Scanning this PC..."/>
+          </DockPanel>
+        </Border>
         <Grid Margin="6">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -3511,8 +3570,13 @@ $LPXaml = @'
                   <CheckBox x:Name="ChkRdp" IsChecked="True" Margin="0,0,0,4"><TextBlock Text="Block Remote Desktop keyboard injection (IgnoreRemoteKeyboardLayout = 1)" TextWrapping="Wrap"/></CheckBox>
                   <CheckBox x:Name="ChkSysLocale" Margin="0"><TextBlock x:Name="TxtSysLocaleLabel" Text="Set the system locale for non-Unicode programs" TextWrapping="Wrap"/></CheckBox>
                   <TextBlock Margin="20,0,0,6" Foreground="#B26A00" TextWrapping="Wrap" Text="Needs a restart. Older (non-Unicode) programs may show garbled text if they expect another code page."/>
-                  <CheckBox x:Name="ChkUninstall" Margin="0"><TextBlock Text="Uninstall other language packs" TextWrapping="Wrap"/></CheckBox>
-                  <TextBlock Margin="20,0,0,6" Foreground="#C62828" TextWrapping="Wrap" Text="WARNING: removes every other installed display language pack (translated Windows interface) from this PC - for ALL users, also those not selected. The display language being applied is never removed. Needs a restart. Restore does not bring removed packs back. Not needed to remove languages from the lists - Apply does that anyway."/>
+                  <Border x:Name="PnlUninstall" Background="#FFF4E5" BorderBrush="#F0B37E" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,2,0,8">
+                    <StackPanel>
+                      <CheckBox x:Name="ChkUninstall" IsChecked="True" Margin="0"><TextBlock Text="Uninstall other language packs (on by default)" FontWeight="SemiBold" TextWrapping="Wrap"/></CheckBox>
+                      <TextBlock x:Name="TxtUninstallList" Margin="20,3,0,0" FontWeight="SemiBold" Foreground="#B71C1C" TextWrapping="Wrap" Text="Checking installed language packs..."/>
+                      <TextBlock Margin="20,3,0,0" Foreground="#8A4B00" TextWrapping="Wrap" Text="Removes these translated Windows interfaces from the whole PC - for ALL users, also those not selected. The display language being applied is never removed. Needs a restart; Restore does not bring them back. Untick to keep them: Apply removes the languages from the language lists anyway."/>
+                    </StackPanel>
+                  </Border>
                   <TextBlock Text="Language pack source folder (optional, for WSUS or offline PCs):" Margin="0,4,0,2"/>
                   <DockPanel>
                     <Button DockPanel.Dock="Right" x:Name="BtnBrowseSource" Content="Browse..." Margin="6,0,0,0"/>
@@ -3524,14 +3588,12 @@ $LPXaml = @'
                 <StackPanel>
                   <TextBlock x:Name="TxtReadySummary" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,6" Text="Scanning this PC..."/>
                   <StackPanel x:Name="PnlReadiness"/>
-                  <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                    <Button x:Name="BtnPreview" Content="Preview changes..." FontWeight="SemiBold" IsEnabled="False"/>
-                  </StackPanel>
                 </StackPanel>
               </GroupBox>
             </StackPanel>
           </ScrollViewer>
         </Grid>
+        </DockPanel>
       </TabItem>
       <TabItem Header="  Status  " x:Name="TabStatus">
         <DockPanel Margin="6">
@@ -3550,13 +3612,16 @@ $LPXaml = @'
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="220"/>
           </Grid.RowDefinitions>
-          <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="PnlPreview" Margin="0,0,10,0"><TextBlock Text="Click 'Preview changes...' on the Configure tab." Foreground="#4A5A6A"/></StackPanel></ScrollViewer>
-          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
-            <Button x:Name="BtnApply" Content="Apply" FontWeight="SemiBold" Background="#1565C0" Foreground="White" IsEnabled="False"/>
-            <Button x:Name="BtnApplyReady" Content="Apply ONLY the parts that are ready" Visibility="Collapsed" Background="#E65100" Foreground="White"/>
-            <Button x:Name="BtnCancel" Content="Cancel download" IsEnabled="False"/>
-            <Button x:Name="BtnOpenLog" Content="Open log"/>
-          </StackPanel>
+          <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"><StackPanel x:Name="PnlPreview" Margin="0,0,10,0"><TextBlock Text="Click 'Next: Preview changes' on the Configure tab." Foreground="#4A5A6A"/></StackPanel></ScrollViewer>
+          <Border Grid.Row="1" Background="#F2F5F9" BorderBrush="#D5DDE8" BorderThickness="1" CornerRadius="4" Padding="12,8" Margin="0,8,0,8">
+            <DockPanel LastChildFill="False">
+              <Button DockPanel.Dock="Left" x:Name="BtnBack" Content="&lt;  Back to settings"/>
+              <Button DockPanel.Dock="Left" x:Name="BtnCancel" Content="Cancel download" IsEnabled="False"/>
+              <Button DockPanel.Dock="Left" x:Name="BtnOpenLog" Content="Open log"/>
+              <Button DockPanel.Dock="Right" x:Name="BtnApply" Content="Apply these changes" FontSize="14" FontWeight="SemiBold" Padding="20,8" Margin="0" Background="#1565C0" Foreground="White" BorderBrush="#0D47A1" IsEnabled="False"/>
+              <Button DockPanel.Dock="Right" x:Name="BtnApplyReady" Content="Apply ONLY the parts that are ready" Visibility="Collapsed" Margin="0,0,8,0" Background="#E65100" Foreground="White"/>
+            </DockPanel>
+          </Border>
           <StackPanel Grid.Row="2" Margin="0,0,0,6">
             <ProgressBar x:Name="PrgApply" Height="16" Minimum="0" Maximum="100"/>
             <TextBlock x:Name="TxtProgress" Margin="0,4,0,0" Foreground="#4A5A6A" TextWrapping="Wrap"/>
@@ -3601,6 +3666,47 @@ $script:LPBadges = @{
     Remove  = @('REMOVE', '#B71C1C')
     Install = @('INSTALL', '#00838F')
     Keep    = @('UNCHANGED', '#9E9E9E')
+}
+
+$script:LPStepLabels = @('Choose settings', 'Preview changes', 'Apply', 'Sign out / restart')
+
+# The step bar: finished steps green with a check mark, the current step blue, later steps grey.
+# Step 5 means everything is finished.
+function Set-LPUiStep {
+    param([int]$Step, [string]$Hint)
+    $g = $script:G
+    $g.Step = $Step
+    for ($i = 1; $i -le 4; $i++) {
+        $box = $g["PnlStep$i"]
+        $txt = $g["TxtStep$i"]
+        $label = $script:LPStepLabels[$i - 1]
+        if ($i -lt $Step) {
+            $box.Background = Get-LPBrush '#E3F1E4'
+            $txt.Foreground = Get-LPBrush '#2E7D32'
+            $txt.FontWeight = [System.Windows.FontWeights]::Normal
+            $txt.Text = ([string][char]0x2713) + '  ' + $label
+        }
+        elseif ($i -eq $Step) {
+            $box.Background = Get-LPBrush '#1565C0'
+            $txt.Foreground = Get-LPBrush '#FFFFFF'
+            $txt.FontWeight = [System.Windows.FontWeights]::SemiBold
+            $txt.Text = "$i  $label"
+        }
+        else {
+            $box.Background = Get-LPBrush '#EEF1F5'
+            $txt.Foreground = Get-LPBrush '#6B7785'
+            $txt.FontWeight = [System.Windows.FontWeights]::Normal
+            $txt.Text = "$i  $label"
+        }
+    }
+    if ($PSBoundParameters.ContainsKey('Hint')) { $g.TxtStepHint.Text = $Hint }
+}
+
+function Set-LPUiStepChoose {
+    $g = $script:G
+    $hint = "Check the settings and who they apply to, then click 'Next: Preview changes' (bottom right). Nothing is changed before you confirm."
+    if ($g.Readiness -and $g.Readiness.HasBlocked) { $hint = "Something is BLOCKED (see Readiness on the right). Fix it, or click 'Next: Preview changes' to see what can be applied." }
+    Set-LPUiStep 1 $hint
 }
 
 function Get-LPBrush {
@@ -3839,6 +3945,7 @@ function Get-LPUiSelection {
 function Request-LPUiReadiness {
     $g = $script:G
     if ($g.Suppress) { return }
+    $g.UserChanged = $true
     $g.ReadyTimer.Stop()
     $g.ReadyTimer.Start()
 }
@@ -3871,10 +3978,23 @@ function Update-LPUiReadiness {
         $g.Plan = $null
         $g.BtnApply.IsEnabled = $false
         $g.BtnApplyReady.Visibility = 'Collapsed'
-        Show-LPReportPanel -Panel $g.PnlPreview -Lines @(New-LPLine 'Info' "The selection changed. Click 'Preview changes...' on the Configure tab again.")
+        Show-LPReportPanel -Panel $g.PnlPreview -Lines @(New-LPLine 'Info' "The selection changed. Click 'Next: Preview changes' on the Configure tab again.")
     }
     $g.TxtReadySummary.Text = Get-LPReadinessSummary $ready
     if ($ready.HasBlocked) { $g.TxtReadySummary.Foreground = Get-LPBrush '#C62828' } else { $g.TxtReadySummary.Foreground = Get-LPBrush '#2E7D32' }
+    $g.TxtConfigFooter.Text = $g.TxtReadySummary.Text + ' The preview shows every change; nothing is changed before you confirm.'
+    $g.TxtConfigFooter.Foreground = $g.TxtReadySummary.Foreground
+    $others = @(Get-LPOtherLanguagePacks -Snapshot $g.Snapshot -DisplayLanguage $sel.DisplayLanguage -KeepSystemUILanguage (-not (@($sel.TargetIds) -contains 'lockscreen')))
+    $g.TxtUninstallList.Foreground = Get-LPBrush '#4A5A6A'
+    if ($others.Count -eq 0) { $g.TxtUninstallList.Text = 'On this PC: no other display language pack is installed - nothing to uninstall.' }
+    elseif (-not $g.ChkUninstall.IsChecked) { $g.TxtUninstallList.Text = 'Off - these stay installed: ' + (Format-LPLanguageNames $others) }
+    elseif ($g.Snapshot.Capabilities -and -not $g.Snapshot.Capabilities.UninstallLanguage) { $g.TxtUninstallList.Text = 'Cannot be uninstalled automatically on this Windows version (they stay installed): ' + (Format-LPLanguageNames $others) }
+    else {
+        $g.TxtUninstallList.Text = 'Will be UNINSTALLED on this PC: ' + (Format-LPLanguageNames $others)
+        $g.TxtUninstallList.Foreground = Get-LPBrush '#B71C1C'
+    }
+    if (-not $g.Busy -and ($g.Step -le 2 -or $g.UserChanged)) { Set-LPUiStepChoose }
+    $g.UserChanged = $false
     Show-LPReportPanel -Panel $g.PnlReadiness -Lines @(Get-LPReadinessLines $ready | Where-Object { $_.Level -ne 'Heading1' })
     $packItem = @($ready.Items | Where-Object { $_.Id -eq 'pack' }) | Select-Object -First 1
     if ($packItem) { $g.TxtDisplayNote.Text = $packItem.Title } else { $g.TxtDisplayNote.Text = '' }
@@ -3898,6 +4018,7 @@ function Set-LPUiFromPreset {
         $g.Sel.Keyboards = New-Object System.Collections.Generic.List[string]
         foreach ($k in @($Preset.keyboards)) { if ($k -and -not $g.Sel.Keyboards.Contains($k)) { $g.Sel.Keyboards.Add($k) } }
         $g.Sel.SystemLocale = $Preset.systemLocale
+        $g.ChkUninstall.IsChecked = (-not $Preset.PSObject.Properties['uninstallOtherLanguages'] -or [bool]$Preset.uninstallOtherLanguages)
         [void](Select-LPItemByTag $g.CmbPreset $Preset.name)
         if (-not (Select-LPItemByTag $g.CmbDisplay $g.Sel.Display)) { Update-LPUiDisplayList }
         $g.TxtFormatFilter.Text = ''
@@ -3913,6 +4034,7 @@ function Set-LPUiFromPreset {
 }
 
 function Reset-LPUiDefaults {
+    param($Preset)
     $g = $script:G
     $prevSuppress = $g.Suppress
     $g.Suppress = $true
@@ -3920,7 +4042,7 @@ function Reset-LPUiDefaults {
         $g.ChkSync.IsChecked = $true
         $g.ChkRdp.IsChecked = $true
         $g.ChkSysLocale.IsChecked = $false
-        $g.ChkUninstall.IsChecked = $false
+        $g.ChkUninstall.IsChecked = (-not $Preset -or -not $Preset.PSObject.Properties['uninstallOtherLanguages'] -or [bool]$Preset.uninstallOtherLanguages)
         if ($g.Snapshot) {
             $defaults = @(Get-LPDefaultTargetIds $g.Snapshot)
             foreach ($c in $g.PnlTargets.Children) { if ($c -is [System.Windows.Controls.CheckBox]) { $c.IsChecked = ($defaults -contains [string]$c.Tag) } }
@@ -3942,7 +4064,12 @@ function Set-LPUiBusy {
         $g.BtnRestore.IsEnabled = ($null -ne $g.LstBackups.SelectedItem)
         $g.BtnApplyStandard.IsEnabled = ($null -ne $g.Snapshot)
     }
+    if ($Busy) { $g.PrgBusy.Visibility = 'Visible' } else { $g.PrgBusy.Visibility = 'Collapsed' }
     if ($Text) { $g.TxtStatusBar.Text = $Text }
+}
+
+function Get-LPUiElapsed {
+    try { return ('{0:N1} s' -f ((Get-Date) - [Diagnostics.Process]::GetCurrentProcess().StartTime).TotalSeconds) } catch { return '?' }
 }
 
 function Start-LPUiBackground {
@@ -4002,8 +4129,10 @@ function Invoke-LPUiTick {
 function Start-LPUiScan {
     param([switch]$ClearStale)
     $g = $script:G
-    Set-LPUiBusy $true 'Scanning this PC (read-only)...'
+    Set-LPUiBusy $true 'Scanning this PC (read-only, takes a few seconds)...'
     $g.TxtReadySummary.Text = 'Scanning this PC...'
+    if ($g.Step -le 1) { Set-LPUiStep 1 'Scanning this PC (read-only, takes a few seconds)...' }
+    $g.ScanStart = Get-Date
     $work = { param($Sync, $A) if ($A.ClearStale) { Clear-LPStaleState }; Get-LPSnapshot }
     $ok = Start-LPUiBackground -Name 'Scan' -Work $work.ToString() -Arguments @{ ClearStale = [bool]$ClearStale } -OnDone {
         param($Result, $Err)
@@ -4012,6 +4141,7 @@ function Start-LPUiScan {
         if ($Err -or -not $Result) {
             [System.Windows.MessageBox]::Show("The scan failed:`n`n$Err", 'Language Profile', 'OK', 'Error') | Out-Null
             $g.TxtStatusBar.Text = 'Scan failed - see log.'
+            Set-LPUiStep 1 "The scan failed - see the log ('Open log' on the Preview and apply tab). Click 'Re-scan PC' to try again."
             return
         }
         $g.Snapshot = $Result
@@ -4023,6 +4153,7 @@ function Start-LPUiScan {
         Update-LPUiTargets
         Update-LPUiReadiness
         $g.TxtStatusBar.Text = ('Scan finished {0:HH:mm:ss}. Log: {1}' -f $Result.ScanTime, $g.SessionLog)
+        Write-LPLog ('Scan took {0:N1} s ({1} after the start).' -f ((Get-Date) - $g.ScanStart).TotalSeconds, (Get-LPUiElapsed)) -Level Detail
     }
     if (-not $ok) { Set-LPUiBusy $false }
 }
@@ -4040,6 +4171,9 @@ function Show-LPUiPreview {
     Show-LPReportPanel -Panel $g.PnlPreview -Lines $lines
     $g.BtnApply.IsEnabled = ($g.Readiness.CanApply -and $plan.Executable -and -not $g.Busy)
     if ($g.Readiness.CanApplyReadyParts) { $g.BtnApplyReady.Visibility = 'Visible' } else { $g.BtnApplyReady.Visibility = 'Collapsed' }
+    if ($g.BtnApply.IsEnabled) { Set-LPUiStep 2 "Check the list of changes. Then click 'Apply these changes' (below the list, right). Nothing has been changed yet." }
+    elseif ($g.Readiness.CanApplyReadyParts) { Set-LPUiStep 2 "Some parts are BLOCKED (red). Fix them and preview again ('Back to settings'), or explicitly apply only the parts that are ready." }
+    else { Set-LPUiStep 2 "Nothing can be applied yet - see the BLOCKED items (red). Fix them, then go 'Back to settings' and preview again." }
     $g.Tabs.SelectedItem = $g.TabApply
 }
 
@@ -4048,8 +4182,9 @@ function Start-LPUiApply {
     $g = $script:G
     if ($g.Bg) { return }
     if (-not $Plan) {
-        Update-LPUiReadiness
-        $Plan = New-LPPlan -Snapshot $g.Snapshot -Selection $g.Selection -Readiness $g.Readiness -ReadyPartsOnly:$ReadyPartsOnly
+        # Fresh plan for the current selection, without touching the preview: answering No keeps it.
+        $sel = Get-LPUiSelection
+        $Plan = New-LPPlan -Snapshot $g.Snapshot -Selection $sel -Readiness (Test-LPReadiness -Snapshot $g.Snapshot -Selection $sel) -ReadyPartsOnly:$ReadyPartsOnly
     }
     if (-not $Plan.Executable) {
         [System.Windows.MessageBox]::Show('Nothing can be applied. See the readiness list.', 'Language Profile', 'OK', 'Information') | Out-Null
@@ -4072,16 +4207,29 @@ function Start-LPUiApply {
     $g.CurrentLog = $applyLog
     $g.TxtLog.AppendText("`r`n---- Apply started. Log file: $applyLog`r`n")
     Set-LPUiBusy $true 'Applying... do not close the window.'
+    Set-LPUiStep 3 'Applying - do not close the window. Progress and log below.'
     $work = { param($Sync, $A) Invoke-LPPlan -Plan $A.Plan -Snapshot $A.Snapshot -Sync $Sync -TaskTimeoutMinutes $A.Timeout }
     $ok = Start-LPUiBackground -Name 'Apply' -Work $work.ToString() -Arguments @{ Plan = $Plan; Snapshot = $g.Snapshot; Timeout = $g.TaskTimeout } -LogFile $applyLog -OnDone {
         param($Result, $Err)
         $g = $script:G
         Set-LPUiBusy $false 'Apply finished.'
         if ($Err -or -not $Result) {
+            Set-LPUiStep 3 "Apply stopped with an error - see the log ('Open log'). A backup of everything changed so far is on the Restore tab."
             [System.Windows.MessageBox]::Show("Apply stopped with an error:`n`n$Err`n`nSee the log. A backup of everything changed so far is on the Restore tab.", 'Language Profile', 'OK', 'Error') | Out-Null
         }
         else {
             Show-LPReportPanel -Panel $g.PnlPreview -Lines $Result.Lines
+            $signOut = @($Result.SignOut | Where-Object { $_ })
+            if ('Error', 'Blocked', 'Cancelled' -contains $Result.Outcome) { Set-LPUiStep 3 ("Apply did not finish ({0}) - see the result below and the log. A backup is on the Restore tab." -f $Result.Outcome) }
+            elseif ($Result.RestartNeeded) {
+                $h = 'Restart the PC to finish.'
+                if ($signOut.Count -gt 0) { $h += ' (A restart also signs out ' + ($signOut -join ', ') + '.)' }
+                if ($Result.Outcome -eq 'Partial') { $h = 'Partly applied - see what was skipped below. ' + $h }
+                Set-LPUiStep 4 $h
+            }
+            elseif ($signOut.Count -gt 0) { Set-LPUiStep 4 ('Sign out and back in to finish: ' + ($signOut -join ', ') + '.') }
+            elseif ($Result.Outcome -eq 'Partial') { Set-LPUiStep 5 'Partly applied - see what was skipped below.' }
+            else { Set-LPUiStep 5 'Done. Nothing else to do.' }
             $msg = (Format-LPReportText $Result.Lines).Trim()
             $icon = 'Information'
             if ($Result.Outcome -eq 'Error' -or $Result.Outcome -eq 'Blocked') { $icon = 'Error' } elseif ($Result.Outcome -eq 'Partial' -or $Result.Outcome -eq 'Cancelled') { $icon = 'Warning' }
@@ -4102,7 +4250,7 @@ function Invoke-LPUiApplyStandard {
     if (-not $g.Snapshot -or $g.Bg) { return }
     $std = Find-LPPreset $g.Presets 'Standard'
     Set-LPUiFromPreset $std
-    Reset-LPUiDefaults
+    Reset-LPUiDefaults -Preset $std
     Update-LPUiReadiness
     $plan = New-LPPlan -Snapshot $g.Snapshot -Selection $g.Selection -Readiness $g.Readiness
     if (-not $g.Readiness.CanApply) {
@@ -4165,13 +4313,38 @@ function Hide-LPConsole {
     catch { }
 }
 
+# Loads the lists (presets, formats, countries, keyboard layouts) and selects the initial preset. Runs
+# after the window is visible, so the window appears quickly.
+function Initialize-LPUiLists {
+    param([string]$InitialPreset)
+    $g = $script:G
+    $presetInfo = Get-LPPresets
+    $g.Presets = $presetInfo.Presets
+    $prevSuppress = $g.Suppress
+    $g.Suppress = $true
+    try { foreach ($p in $g.Presets) { [void]$g.CmbPreset.Items.Add((New-LPListItem -Text $p.name -Tag $p.name)) } }
+    finally { $g.Suppress = $prevSuppress }
+    if (@($presetInfo.Warnings).Count -gt 0) { $g.TxtStatusBar.Text = (@($presetInfo.Warnings) -join ' ') }
+    $g.Formats = @(Get-LPFormatCatalog)
+    $g.Geos = @(Get-LPGeoCatalog)
+    $g.Layouts = @(Get-LPKeyboardLayouts)
+    Update-LPUiDisplayList
+    Update-LPUiKbAvailable
+    # Initial state: Standard (or the requested preset) preselected
+    $start = $null
+    if ($InitialPreset) { $start = Find-LPPreset $g.Presets $InitialPreset }
+    if (-not $start) { $start = Find-LPPreset $g.Presets 'Standard' }
+    Set-LPUiFromPreset $start
+    Update-LPUiBackups
+}
+
 function Start-LPGui {
-    param([string]$InitialPreset, [int]$TaskTimeoutMinutes = 10)
+    param([string]$InitialPreset, [int]$TaskTimeoutMinutes = 10, [switch]$ConsoleHidden)
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
-    Hide-LPConsole
 
     $uiLog = New-Object 'System.Collections.Concurrent.ConcurrentQueue[string]'
     $sessionLog = Initialize-LPEngine -ScriptRoot $script:LPScriptRoot -LogQueue $uiLog -LogName 'Session'
+    if ($script:LPLaunchedFrom) { Write-LPLog "Started from the network folder $($script:LPLaunchedFrom); running a verified local copy from $($script:LPScriptRoot)." -Level Info }
 
     [xml]$xml = $LPXaml
     $window = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xml))
@@ -4189,21 +4362,15 @@ function Start-LPGui {
         Plan        = $null
         PresetName  = $null
         TaskTimeout = $TaskTimeoutMinutes
+        Step        = 1
+        UserChanged = $false
+        InitialPreset = $InitialPreset
+        ConsoleHidden = [bool]$ConsoleHidden
         Sel         = @{ Display = $null; Format = $null; GeoId = 0; Keyboards = (New-Object System.Collections.Generic.List[string]); SystemLocale = $null }
     }
     $g = $script:G
     foreach ($m in [regex]::Matches($LPXaml, 'x:Name="(\w+)"')) { $n = $m.Groups[1].Value; $g[$n] = $window.FindName($n) }
-
-    # Static lists
-    $presetInfo = Get-LPPresets
-    $g.Presets = $presetInfo.Presets
-    foreach ($p in $g.Presets) { [void]$g.CmbPreset.Items.Add((New-LPListItem -Text $p.name -Tag $p.name)) }
-    if (@($presetInfo.Warnings).Count -gt 0) { $g.TxtStatusBar.Text = (@($presetInfo.Warnings) -join ' ') }
-    $g.Formats = @(Get-LPFormatCatalog)
-    $g.Geos = @(Get-LPGeoCatalog)
-    $g.Layouts = @(Get-LPKeyboardLayouts)
-    Update-LPUiDisplayList
-    Update-LPUiKbAvailable
+    $g.Formats = @(); $g.Geos = @(); $g.Layouts = @(); $g.Presets = @()
 
     $g.ReadyTimer = New-Object System.Windows.Threading.DispatcherTimer
     $g.ReadyTimer.Interval = [TimeSpan]::FromMilliseconds(350)
@@ -4283,6 +4450,9 @@ function Start-LPGui {
     $g.BtnRescan.Add_Click({ Start-LPUiScan })
     $g.BtnStatusRefresh.Add_Click({ Start-LPUiScan })
     $g.BtnPreview.Add_Click({ Show-LPUiPreview })
+    $g.BtnBack.Add_Click({ $script:G.Tabs.SelectedItem = $script:G.TabConfigure })
+    $g.PnlStep1.Add_MouseLeftButtonUp({ $script:G.Tabs.SelectedItem = $script:G.TabConfigure })
+    foreach ($n in 'PnlStep2', 'PnlStep3', 'PnlStep4') { $g[$n].Add_MouseLeftButtonUp({ $script:G.Tabs.SelectedItem = $script:G.TabApply }) }
     $g.BtnApply.Add_Click({ Start-LPUiApply })
     $g.BtnApplyReady.Add_Click({ Start-LPUiApply -ReadyPartsOnly })
     $g.BtnCancel.Add_Click({
@@ -4306,15 +4476,23 @@ function Start-LPGui {
             }
         })
 
-    # Initial state: Standard (or the requested preset) preselected
-    $start = $null
-    if ($InitialPreset) { $start = Find-LPPreset $g.Presets $InitialPreset }
-    if (-not $start) { $start = Find-LPPreset $g.Presets 'Standard' }
-    Set-LPUiFromPreset $start
-    Update-LPUiBackups
-    $g.TxtContext.Text = 'Running as ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name + ' (elevated). Scanning this PC...'
+    # Show the window first, then load the lists and start the scan.
+    $window.Add_ContentRendered({
+            $g = $script:G
+            if ($g.Started) { return }
+            $g.Started = $true
+            Write-LPLog ('Window shown {0} after the start.' -f (Get-LPUiElapsed)) -Level Detail
+            try { Initialize-LPUiLists -InitialPreset $g.InitialPreset }
+            catch { [System.Windows.MessageBox]::Show("Loading the lists failed:`n`n$($_.Exception.Message)", 'Language Profile', 'OK', 'Error') | Out-Null }
+            Write-LPLog ('Lists loaded {0} after the start.' -f (Get-LPUiElapsed)) -Level Detail
+            Start-LPUiScan -ClearStale
+            # Started directly as administrator: hide the console window (the elevated launch is hidden already).
+            if (-not $g.ConsoleHidden) { Hide-LPConsole }
+        })
+    Set-LPUiBusy $true 'Loading...'
+    Set-LPUiStep 1 'Loading - this takes a few seconds...'
+    $g.TxtContext.Text = 'Running as ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name + ' (elevated). Loading...'
     $g.Ticker.Start()
-    $window.Add_ContentRendered({ Start-LPUiScan -ClearStale })
     [void]$window.ShowDialog()
     $g.Ticker.Stop()
 }
@@ -4329,6 +4507,7 @@ function Invoke-LPCli {
     if ($P.Restore) { $logName = 'Restore' } elseif ($P.Status) { $logName = 'Status' } elseif ($P.Verify) { $logName = 'Verify' } elseif ($P.Preview) { $logName = 'Preview' }
     $log = Initialize-LPEngine -ScriptRoot $script:LPScriptRoot -Console:(-not $P.Json) -LogName $logName
     Write-LPLog "Language Profile $(Get-LPVersion) - $logName - log: $log" -Level Step
+    if ($script:LPLaunchedFrom) { Write-LPLog "Started from the network folder $($script:LPLaunchedFrom); running a verified local copy from $($script:LPScriptRoot)." -Level Info }
     try {
         if ($P.Restore) {
             Clear-LPStaleState
@@ -4354,6 +4533,11 @@ function Invoke-LPCli {
             }
         }
         $disp = $P.DisplayLanguage; $fmt = $P.RegionalFormat; $geo = [int]$P.GeoId; $kbs = @($P.Keyboard); $sysLoc = $P.SystemLocale
+        # Uninstalling the other display language packs is the default (same as the GUI).
+        $uninstall = $true
+        if ($preset -and $preset.PSObject.Properties['uninstallOtherLanguages']) { $uninstall = [bool]$preset.uninstallOtherLanguages }
+        if ($P.UninstallOtherLanguages) { $uninstall = $true }
+        if ($P.KeepOtherLanguages) { $uninstall = $false }
         if ($preset) {
             if (-not $disp) { $disp = $preset.displayLanguage }
             if (-not $fmt) { $fmt = $preset.regionalFormat }
@@ -4378,7 +4562,7 @@ function Invoke-LPCli {
             $targetIds = @(Resolve-LPTargetIds -Snapshot $snap -Target @($P.Target))
             $sel = New-LPSelection -PresetName $(if ($preset) { $preset.name } else { $null }) -DisplayLanguage $disp -RegionalFormat $fmt -GeoId $geo -Keyboards $kbs -TargetIds $targetIds `
                 -DisableSync (-not $P.KeepLanguageSync) -BlockRemoteKeyboard (-not $P.AllowRemoteKeyboardLayout) -SetSystemLocale ([bool]$P.SetSystemLocale) -SystemLocale $sysLoc `
-                -UninstallOthers ([bool]$P.UninstallOtherLanguages) -LanguageSource $P.LanguageSource
+                -UninstallOthers $uninstall -LanguageSource $P.LanguageSource
         }
 
         if ($P.Status) {
@@ -4439,6 +4623,7 @@ function Invoke-LPCli {
 # ================================================================================================
 $script:LPScriptRoot = $PSScriptRoot
 $script:LPEngineText = $LPEngineScript.ToString()
+$script:LPLaunchedFrom = $LaunchedFrom
 
 function ConvertTo-LPQuotedArg {
     param([string]$Value)
@@ -4461,10 +4646,108 @@ function Get-LPForwardArgs {
     return $list.ToArray()
 }
 
+function Test-LPNetworkPath {
+    param([string]$Path)
+    if (-not $Path) { return $false }
+    if ($Path.StartsWith('\\') -and -not $Path.StartsWith('\\?\') -and -not $Path.StartsWith('\\.\')) { return $true }
+    try {
+        $root = [IO.Path]::GetPathRoot($Path)
+        if ($root) { return ((New-Object IO.DriveInfo($root)).DriveType -eq [IO.DriveType]::Network) }
+    }
+    catch { }
+    return $false
+}
+
+function Get-LPSha256 {
+    param([byte[]]$Bytes)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes)) -replace '-', '') }
+    finally { $sha.Dispose() }
+}
+
+# Copies the tool (script, launcher, presets.json) into the user's temp folder, as the user. Returns the
+# folder and the SHA-256 of every file as read from the source.
+function Copy-LPToLocal {
+    param([Parameter(Mandatory)][string]$SourceDir)
+    $dest = Join-Path ([IO.Path]::GetTempPath()) 'LanguageProfile-Launch'
+    if (Test-Path -LiteralPath $dest) { [IO.Directory]::Delete($dest, $true) }
+    $null = [IO.Directory]::CreateDirectory($dest)
+    $hashes = [ordered]@{}
+    foreach ($f in 'LanguageProfile.ps1', 'LanguageProfile.cmd', 'presets.json') {
+        $src = Join-Path $SourceDir $f
+        if (-not (Test-Path -LiteralPath $src)) {
+            if ($f -eq 'LanguageProfile.ps1') { throw "$src not found" }
+            continue
+        }
+        $bytes = [IO.File]::ReadAllBytes($src)
+        $hashes[$f] = Get-LPSha256 $bytes
+        [IO.File]::WriteAllBytes((Join-Path $dest $f), $bytes)
+    }
+    return [pscustomobject]@{ Dir = $dest; Hashes = $hashes }
+}
+
+# Command run by the elevated PowerShell when the tool was started from a network folder. The staged copy
+# in the user's temp folder can be changed by the user (or anything running as the user) until the
+# administrator has confirmed the UAC prompt. So the elevated side copies it into a new folder only SYSTEM
+# and Administrators can write to, checks every file against the hash taken from the source before
+# elevation, runs that copy and deletes it afterwards. The staged copy is deleted by the launcher (as the
+# user), never by the elevated side.
+function Get-LPLaunchBootstrap {
+    param([string]$StageDir, $Hashes, [string[]]$ForwardArgs, [bool]$Gui)
+    $q = { param([string]$s) "'" + ($s -replace "'", "''") + "'" }
+    $hashText = (@($Hashes.Keys) | ForEach-Object { '{0} = {1}' -f (& $q $_), (& $q $Hashes[$_]) }) -join '; '
+    $argText = (@($ForwardArgs) | ForEach-Object { if ($_ -match '^-[A-Za-z]+$') { $_ } else { & $q $_ } }) -join ' '
+    $guiText = '$false'
+    if ($Gui) { $guiText = '$true' }
+    return @"
+`$ErrorActionPreference = 'Stop'
+`$src = $(& $q $StageDir)
+`$files = [ordered]@{ $hashText }
+`$gui = $guiText
+`$dst = Join-Path `$env:SystemRoot ('Temp\LanguageProfile-Run-' + [guid]::NewGuid().ToString('N'))
+`$code = 1
+try {
+    `$sec = New-Object System.Security.AccessControl.DirectorySecurity
+    `$sec.SetAccessRuleProtection(`$true, `$false)
+    foreach (`$sid in 'S-1-5-18', 'S-1-5-32-544') {
+        `$id = New-Object System.Security.Principal.SecurityIdentifier(`$sid)
+        `$sec.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(`$id, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')))
+    }
+    `$null = [IO.Directory]::CreateDirectory(`$dst, `$sec)
+    `$sha = [Security.Cryptography.SHA256]::Create()
+    foreach (`$f in @(`$files.Keys)) {
+        `$bytes = [IO.File]::ReadAllBytes((Join-Path `$src `$f))
+        if (([BitConverter]::ToString(`$sha.ComputeHash(`$bytes)) -replace '-', '') -ne `$files[`$f]) { throw "`$f in `$src was changed after it was copied from the network folder. Start the tool again." }
+        [IO.File]::WriteAllBytes((Join-Path `$dst `$f), `$bytes)
+    }
+    `$ErrorActionPreference = 'Continue'
+    & (Join-Path `$dst 'LanguageProfile.ps1') $argText
+    `$code = `$LASTEXITCODE
+}
+catch {
+    `$msg = 'Language Profile could not be started from the network folder: ' + `$_.Exception.Message
+    if (`$gui) { try { Add-Type -AssemblyName PresentationFramework; [void][System.Windows.MessageBox]::Show(`$msg, 'Language Profile', 'OK', 'Error') } catch { } }
+    [Console]::Error.WriteLine(`$msg)
+    `$code = 1
+}
+finally {
+    try { if ([IO.Directory]::Exists(`$dst)) { [IO.Directory]::Delete(`$dst, `$true) } } catch { }
+}
+exit `$code
+"@
+}
+
+function Show-LPLaunchError {
+    param([string]$Message, [bool]$Console)
+    if ($Console) { [Console]::Error.WriteLine($Message); return }
+    try { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show($Message, 'Language Profile', 'OK', 'Error') | Out-Null }
+    catch { [Console]::Error.WriteLine($Message) }
+}
+
 $bound = @{}
 foreach ($k in $PSBoundParameters.Keys) { $bound[$k] = $PSBoundParameters[$k] }
 $cliKeys = 'Preset', 'DisplayLanguage', 'RegionalFormat', 'GeoId', 'Keyboard', 'Target', 'KeepLanguageSync', 'AllowRemoteKeyboardLayout', 'SetSystemLocale', 'SystemLocale',
-'UninstallOtherLanguages', 'LanguageSource', 'ApplyReadyParts', 'Preview', 'Status', 'Verify', 'Json', 'Restore', 'NoUI'
+'UninstallOtherLanguages', 'KeepOtherLanguages', 'LanguageSource', 'ApplyReadyParts', 'Preview', 'Status', 'Verify', 'Json', 'Restore', 'NoUI'
 $isCli = (-not $Gui) -and (@($bound.Keys | Where-Object { $cliKeys -contains $_ }).Count -gt 0)
 $psExe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
 
@@ -4486,21 +4769,62 @@ if (-not $isAdmin) {
         [Console]::Error.WriteLine('Language Profile: elevation did not result in administrator rights.')
         exit 1
     }
+    # Started from a network share or mapped drive: the elevated (often different) admin account cannot see
+    # the user's drive mappings and usually has no access to the share. Copy the tool to the local disk as
+    # the user first; the elevated side verifies that copy (Get-LPLaunchBootstrap) before running it.
     $fwd = @(Get-LPForwardArgs $bound) + '-Elevated'
+    $stage = $null
     $argLine = '-NoProfile -ExecutionPolicy Bypass -File ' + (ConvertTo-LPQuotedArg $PSCommandPath) + ' ' + ((@($fwd) | ForEach-Object { ConvertTo-LPQuotedArg $_ }) -join ' ')
+    if (Test-LPNetworkPath $PSCommandPath) {
+        try {
+            $stage = Copy-LPToLocal -SourceDir $PSScriptRoot
+            $boot = Get-LPLaunchBootstrap -StageDir $stage.Dir -Hashes $stage.Hashes -ForwardArgs (@($fwd) + @('-LaunchedFrom', $PSScriptRoot)) -Gui (-not $isCli)
+            $argLine = '-NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($boot))
+        }
+        catch {
+            Show-LPLaunchError ("Language Profile was started from a network folder ($PSScriptRoot) and could not be copied to the local disk: " + $_.Exception.Message + "`n`nCopy the folder to the local disk (e.g. C:\LP) and start it from there.") $isCli
+            exit 1
+        }
+    }
     try {
         if ($isCli) {
             Write-Host 'Language Profile needs administrator rights - confirm the UAC prompt. Output goes to the elevated window and to the log under %ProgramData%\LanguageProfile\Logs.'
             $proc = Start-Process -FilePath $psExe -ArgumentList $argLine -Verb RunAs -PassThru -Wait
+            if ($stage) { try { [IO.Directory]::Delete($stage.Dir, $true) } catch { } }
             exit $proc.ExitCode
         }
-        Start-Process -FilePath $psExe -ArgumentList $argLine -Verb RunAs -WindowStyle Hidden | Out-Null
-        exit 0
+        Write-Host 'Language Profile needs administrator rights. Confirm the UAC prompt (any administrator account).'
+        $proc = Start-Process -FilePath $psExe -ArgumentList $argLine -Verb RunAs -WindowStyle Hidden -PassThru
     }
     catch {
-        [Console]::Error.WriteLine('Language Profile needs administrator rights (any administrator account). The UAC prompt was cancelled or failed: ' + $_.Exception.Message)
+        Show-LPLaunchError ('Language Profile needs administrator rights (any administrator account). The UAC prompt was cancelled or failed: ' + $_.Exception.Message) $isCli
         exit 1
     }
+    # The elevated PowerShell is hidden. Keep this console open with a progress line until its window is
+    # visible, and report it if it stops before that instead of failing silently.
+    Write-Host -NoNewline 'Starting Language Profile, the window opens in a few seconds '
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        while ($proc -and $sw.Elapsed.TotalSeconds -lt 120) {
+            if ($proc.HasExited) {
+                if ($proc.ExitCode -ne 0) {
+                    Write-Host ''
+                    Show-LPLaunchError ("The elevated part of Language Profile stopped before its window opened (exit code $($proc.ExitCode)).`n`nThe log folder is %ProgramData%\LanguageProfile\Logs. If the tool is in a network folder, copying it to the local disk (e.g. C:\LP) is a workaround.") $false
+                    exit 1
+                }
+                break
+            }
+            $proc.Refresh()
+            if ($proc.MainWindowHandle -ne [IntPtr]::Zero) { break }
+            Write-Host -NoNewline '.'
+            Start-Sleep -Milliseconds 500
+        }
+        # The elevated side copies the staged files right after the start; by now they are not needed.
+        if ($stage -and ($proc.HasExited -or $proc.MainWindowHandle -ne [IntPtr]::Zero)) { [IO.Directory]::Delete($stage.Dir, $true) }
+    }
+    catch { }
+    Write-Host ''
+    exit 0
 }
 
 # WPF needs an STA thread (powershell.exe -File is STA by default; this is a safety net).
@@ -4534,14 +4858,14 @@ try {
             Preset = $Preset; DisplayLanguage = $DisplayLanguage; RegionalFormat = $RegionalFormat; GeoId = $GeoId
             Keyboard = @($Keyboard | Where-Object { $_ }); Target = @($Target | Where-Object { $_ })
             KeepLanguageSync = [bool]$KeepLanguageSync; AllowRemoteKeyboardLayout = [bool]$AllowRemoteKeyboardLayout
-            SetSystemLocale = [bool]$SetSystemLocale; SystemLocale = $SystemLocale; UninstallOtherLanguages = [bool]$UninstallOtherLanguages
+            SetSystemLocale = [bool]$SetSystemLocale; SystemLocale = $SystemLocale; UninstallOtherLanguages = [bool]$UninstallOtherLanguages; KeepOtherLanguages = [bool]$KeepOtherLanguages
             LanguageSource = $LanguageSource; ApplyReadyParts = [bool]$ApplyReadyParts; Preview = [bool]$Preview; Status = [bool]$Status
             Verify = [bool]$Verify; Json = [bool]$Json; Restore = $Restore; TaskTimeoutMinutes = $TaskTimeoutMinutes
         }
         $exitCode = [int](Invoke-LPCli -P $cliParams | Select-Object -Last 1)
     }
     else {
-        try { Start-LPGui -InitialPreset $Preset -TaskTimeoutMinutes $TaskTimeoutMinutes }
+        try { Start-LPGui -InitialPreset $Preset -TaskTimeoutMinutes $TaskTimeoutMinutes -ConsoleHidden:$Elevated }
         catch {
             try { Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show("Language Profile could not start:`n`n$($_.Exception.Message)`n`n$($_.ScriptStackTrace)", 'Language Profile', 'OK', 'Error') | Out-Null } catch { }
             $exitCode = 1

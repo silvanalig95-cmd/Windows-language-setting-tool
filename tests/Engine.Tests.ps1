@@ -241,6 +241,20 @@ $snap = New-FakeSnapshot -Installed @('en-US', 'de-DE', 'fr-FR') -Full @('en-US'
 $plan = New-LPPlan -Snapshot $snap -Selection $u -Readiness (Test-LPReadiness -Snapshot $snap -Selection $u)
 $un = @($plan.Steps | Where-Object { $_.Kind -eq 'Uninstall' })[0]
 Assert ((Eq $un.Languages @('de-DE', 'fr-FR')) -and -not (@($un.Languages) -contains 'en-US')) 'uninstall never removes the display language'
+$r = Test-LPReadiness -Snapshot $snap -Selection $u
+$ui = @($r.Items | Where-Object { $_.Id -eq 'uninstall' })[0]
+Assert ($ui.State -eq 'Warn' -and $ui.Title -like '*UNINSTALLED*German (Germany) `[de-DE`]*French (France) `[fr-FR`]*' -and $r.CanApply) 'uninstall is a warning naming the packs, not a blocker'
+Assert ((Get-LPPlanSummaryText -Plan $plan -Snapshot $snap) -match 'UNINSTALLS these display language packs.*de-DE') 'confirmation names the packs to uninstall'
+$snapNoUn = New-FakeSnapshot -Installed @('en-US', 'de-DE') -Full @('en-US', 'de-DE')
+$snapNoUn.Capabilities.UninstallLanguage = $false
+$r = Test-LPReadiness -Snapshot $snapNoUn -Selection $u
+$plan = New-LPPlan -Snapshot $snapNoUn -Selection $u -Readiness $r
+Assert ($r.CanApply -and @($r.Items | Where-Object { $_.Id -eq 'uninstall' -and $_.State -eq 'Warn' }).Count -eq 1 -and @($plan.Steps | Where-Object { $_.Kind -eq 'Uninstall' }).Count -eq 0 -and $plan.Executable) 'without Uninstall-Language: warning, the rest is applied, no uninstall step'
+$r = Test-LPReadiness -Snapshot (New-FakeSnapshot -Installed @('en-US') -Full @('en-US')) -Selection $u
+Assert (@($r.Items | Where-Object { $_.Id -eq 'uninstall' -and $_.State -eq 'OK' -and $_.Title -like '*en-US is the only*' }).Count -eq 1) 'no other packs: OK'
+Assert ((Format-LPLanguageNames @('en-GB', 'de-CH')) -eq 'English (United Kingdom) [en-GB], German (Switzerland) [de-CH]') 'language names for the UI'
+$snapSys = New-FakeSnapshot -Installed @('en-US', 'de-DE', 'fr-FR') -Full @('en-US', 'de-DE', 'fr-FR') -SysUi 'de-DE'
+Assert ((Eq @(Get-LPOtherLanguagePacks -Snapshot $snapSys -DisplayLanguage 'en-US' -KeepSystemUILanguage $true) @('fr-FR')) -and (Eq @(Get-LPOtherLanguagePacks -Snapshot $snapSys -DisplayLanguage 'en-US' -KeepSystemUILanguage $false) @('de-DE', 'fr-FR'))) 'system UI language kept when the lock screen is not a target'
 
 # ------------------------------------------------------------------------------------------------
 Write-Host 'Compliance and risks'
@@ -273,6 +287,12 @@ $pr = Get-LPPresets -Path (Join-Path $PSScriptRoot '..\presets.json')
 $s = Find-LPPreset $pr.Presets 'Standard'
 Assert ($s -and $s.displayLanguage -eq 'en-US' -and $s.regionalFormat -eq 'de-CH' -and $s.geoId -eq 223 -and (Eq $s.keyboards @('00000807'))) 'presets.json Standard = en-US / de-CH / 223 / 00000807'
 Assert (@($pr.Warnings).Count -eq 0) 'presets.json has no warnings'
+Assert (@($pr.Presets | Where-Object { $_.uninstallOtherLanguages -ne $true }).Count -eq 0) 'shipped presets uninstall the other language packs'
+$tmp = [IO.Path]::GetTempFileName()
+'{ "presets": [ { "name": "Keep", "displayLanguage": "en-US", "regionalFormat": "de-CH", "keyboards": ["00000807"], "uninstallOtherLanguages": false }, { "name": "Default", "displayLanguage": "en-US", "regionalFormat": "de-CH", "keyboards": ["00000807"] }, { "name": "Bad", "displayLanguage": "en-US", "regionalFormat": "de-CH", "keyboards": ["00000807"], "uninstallOtherLanguages": "yes" } ] }' | Set-Content -LiteralPath $tmp
+$pr = Get-LPPresets -Path $tmp
+Assert ((Find-LPPreset $pr.Presets 'Keep').uninstallOtherLanguages -eq $false -and (Find-LPPreset $pr.Presets 'Default').uninstallOtherLanguages -eq $true -and -not (Find-LPPreset $pr.Presets 'Bad') -and (Find-LPPreset $pr.Presets 'Standard').uninstallOtherLanguages -eq $true) 'uninstallOtherLanguages: false respected, default true, non-boolean rejected'
+Remove-Item -LiteralPath $tmp
 $tmp = [IO.Path]::GetTempFileName()
 '{ "presets": [ { "name": "Broken", "displayLanguage": "en-US", "regionalFormat": "de-CH", "keyboards": ["807"] } ] }' | Set-Content -LiteralPath $tmp
 $pr = Get-LPPresets -Path $tmp
@@ -428,6 +448,30 @@ $diff | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_.SideI
 Assert ($diff.Count -eq 0) "restore from manifest JSON is exact ($($diff.Count) differences)"
 $lines = Get-LPStateLines -State (Get-LPHiveState -Base (New-FakeHive $fx.userBefore) -Root '' -Layouts $layouts) -Layouts $layouts -SystemUILanguage 'en-US'
 Assert (@($lines | Where-Object { $_.Text -like 'List backup:*US*' }).Count -eq 1 -and @($lines | Where-Object { $_.Text -like 'Text input (CTF):*en-GB*' }).Count -eq 1) 'status shows the backup and CTF entries'
+
+# ------------------------------------------------------------------------------------------------
+Write-Host 'Launch from a network folder'
+foreach ($fn in 'ConvertTo-LPQuotedArg', 'Get-LPForwardArgs', 'Test-LPNetworkPath', 'Get-LPSha256', 'Get-LPLaunchBootstrap') {
+    $fnDef = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $fn }, $false)
+    . ([scriptblock]::Create($fnDef.Extent.Text))
+}
+Assert ((Test-LPNetworkPath '\\srv\share\LP\LanguageProfile.ps1') -and -not (Test-LPNetworkPath '\\?\C:\LP\x.ps1') -and -not (Test-LPNetworkPath '')) 'UNC paths are network paths'
+$bytes = [Text.Encoding]::UTF8.GetBytes('abc')
+Assert ((Get-LPSha256 $bytes) -eq 'BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD') 'SHA-256 helper'
+$hashes = [ordered]@{ 'LanguageProfile.ps1' = 'AA'; 'presets.json' = 'BB' }
+$fwd = @(Get-LPForwardArgs @{ Preset = 'Standard'; Gui = [System.Management.Automation.SwitchParameter]$true }) + '-Elevated' + '-LaunchedFrom' + "\\srv\it's share"
+$lb = Get-LPLaunchBootstrap -StageDir "C:\Users\o'neil\AppData\Local\Temp\LanguageProfile-Launch" -Hashes $hashes -ForwardArgs $fwd -Gui $true
+$le = $null; $lt = $null
+$lba = [System.Management.Automation.Language.Parser]::ParseInput($lb, [ref]$lt, [ref]$le)
+Assert (@($le).Count -eq 0) 'launch bootstrap parses'
+$inv = $lba.Find({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.InvocationOperator -eq 'Ampersand' }, $true)
+$invArgs = @($inv.CommandElements | Select-Object -Skip 1 | ForEach-Object { if ($_ -is [System.Management.Automation.Language.CommandParameterAst]) { '-' + $_.ParameterName } else { $_.SafeGetValue() } })
+Assert ((@($invArgs) -contains '-Elevated') -and (@($invArgs) -contains '-Gui') -and (@($invArgs) -contains 'Standard') -and (@($invArgs) -contains "\\srv\it's share")) "launch bootstrap forwards the arguments ($($invArgs -join ' | '))"
+Assert ($lb -match [regex]::Escape("'C:\Users\o''neil\AppData\Local\Temp\LanguageProfile-Launch'") -and $lb -match "'presets.json' = 'BB'") 'launch bootstrap quotes the stage folder and carries the hashes'
+Assert ($lb.IndexOf('-ne $files[$f]') -gt 0 -and $lb.IndexOf('-ne $files[$f]') -lt $lb.IndexOf("& (Join-Path `$dst 'LanguageProfile.ps1')")) 'launch bootstrap checks the hashes before it runs the copy'
+Assert ($lb -match 'SetAccessRuleProtection\(\$true' -and $lb -match "'S-1-5-32-544'" -and $lb -notmatch 'S-1-5-32-545') 'launch copy is in a folder only SYSTEM and Administrators can write to'
+$long = Get-LPLaunchBootstrap -StageDir ('C:\' + ('x' * 240)) -Hashes $hashes -ForwardArgs (@($fwd) + '-Target' + ('y' * 400)) -Gui $false
+Assert ([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($long)).Length -lt 30000) 'encoded launch command fits on a command line'
 
 Write-Host ''
 Write-Host ("{0} passed, {1} failed" -f $script:pass, $script:fail) -ForegroundColor $(if ($script:fail) { 'Red' } else { 'Green' })

@@ -52,6 +52,17 @@ If a run fails, the transcript contains the error.
   - policies are shown.
 - [ ] `LanguageProfile.cmd -Preset Standard -Preview` shows readiness and preview and changes nothing. Exit code: 0 when ready, 2 when blocked.
 - [ ] GUI opens. Standard is preselected and the readiness panel updates when fields change.
+  - While it starts, the launcher window shows "Starting Language Profile..." until the tool window is visible.
+  - The tool window shows "Loading..." with a moving bar at the bottom right until the scan is done.
+  - The session log has "Window shown ... after the start" and "Scan took ..." lines. Please send these timings.
+- [ ] Step bar: "1 Choose settings" is blue. **Next: Preview changes** (bottom right) switches to the preview
+  and step 2. **Back to settings** goes back. Changing a field after the preview goes back to step 1.
+- [ ] "Uninstall other language packs" is ticked. The orange box lists the packs on this PC, e.g.
+  "Will be UNINSTALLED on this PC: English (United Kingdom) [en-GB]" (or "nothing to uninstall").
+  Unticking it changes the text to "Off - these stay installed".
+- [ ] Network folder: copy the repository to a share, map it as a drive, and double-click `LanguageProfile.cmd`
+  there as a standard user. Enter the admin credentials. The GUI opens, and the session log says
+  "Started from the network folder ...". Repeat with the `\\server\share` path.
 - [ ] In PowerShell 7: `pwsh -File LanguageProfile.ps1` refuses to run.
 
 ## Phase 2: "Done means"
