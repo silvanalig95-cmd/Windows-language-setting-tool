@@ -194,6 +194,12 @@ LanguageProfile.cmd -DisplayLanguage en-US -RegionalFormat de-CH -GeoId 223 -Key
 | New users | The Default profile hive (path from the `Default` value in ProfileList) gets the same exact copy. |
 
 The **recipe** that runs inside an account:
+0. `Set-WinCultureFromLanguageListOptOut -OptOut $true`, plus `User Profile\UserLocaleFromLanguageProfileOptOut = 1`
+   (the value the tool verifies). Without it, Windows sets the regional format to the display language's
+   whenever the language list or the display language changes. Settings then shows "Use Windows display
+   language", and the format turns into en-US instead of de-CH: right away, or a few minutes after the next
+   sign-in. The step runs before the list changes. After `Set-Culture` it runs again, and the format is set
+   once more if it was switched back in between.
 1. `New-WinUserLanguageList <display>`, clear its tips, add `LLLL:KKKKKKKK` for each keyboard.
    LLLL = `'{0:X4}' -f` the display LCID. Display languages with LCID 4096 are rejected.
 2. `Set-WinUserLanguageList -Force`
@@ -307,6 +313,7 @@ If anything is BLOCKED, Apply changes **nothing**. "Apply only the parts that ar
 | 5 | Hidden Preload entries. | Preload/Substitutes are rewritten in every target. Status lists hidden entries (Preload entries mapped through Substitutes that are not in the list). |
 | 5a | Windows' backup of the language list (`User Profile System Backup`) keeps old keyboards. The registry diff showed the US keyboard still there after `Set-WinUserLanguageList`, and Windows can restore the list from that backup. | The backup is rewritten to equal the new list in every target. Status and `-Verify` report a stale backup. |
 | 5b | Text-input entries of removed languages (`CTF\SortOrder`, `CTF\Assemblies`). The diff showed en-GB with a German keyboard left behind, and Microsoft's own "copy to welcome screen" spread it to the lock screen. | Removed in every target. Status and `-Verify` report leftovers. |
+| 5c | The regional format follows the display language. This is Windows' default: the format is switched to the display language's (en-US) whenever the list or the display language changes. Settings shows "Use Windows display language". Seen on Windows 11 25H2: de-CH was set, then turned back into en-US within seconds, and again a few minutes after the restart. | `Set-WinCultureFromLanguageListOptOut -OptOut $true` / `UserLocaleFromLanguageProfileOptOut = 1` in every target, before the list changes. Status, the preview and `-Verify` report it. |
 | 6 | GPO/Intune policies. | Detected, reported and BLOCKED, never fought. |
 | 7 | PowerShell traps. | All registry writes use the .NET API, never `New-Item -Force`. `reg.exe` and `icacls.exe` run through a wrapper with a local `$ErrorActionPreference='Continue'` that checks `$LASTEXITCODE`. |
 | 8 | Hive handling. | `[gc]::Collect()` and `WaitForPendingFinalizers()` before unloading, unload in `finally` with retries. Loaded hives are used in place. Stale mounts from a crashed run are unloaded at start. The GUI cannot be closed while a hive may be loaded. |
@@ -321,7 +328,7 @@ Before any change, every key below is exported **per target** to `%ProgramData%\
 | Key | What | How it is written |
 |---|---|---|
 | `Control Panel\International` | All values (`Locale`, `LocaleName`, `sShortDate`, ...) | Values replaced. Subkeys such as `Calendars` untouched. |
-| `Control Panel\International\User Profile` | `Languages`, `InputMethodOverride`, per-language subkey with tips | Whole key replaced |
+| `Control Panel\International\User Profile` | `Languages`, `InputMethodOverride`, `UserLocaleFromLanguageProfileOptOut = 1` (keep the regional format), per-language subkey with tips | Whole key replaced |
 | `Control Panel\International\User Profile System Backup` | Same layout | Whole key replaced |
 | `Control Panel\International\Geo` | `Nation`, `Name` | Whole key replaced |
 | `Control Panel\Desktop` | **Only** `PreferredUILanguages`, `PreferredUILanguagesPending`, `PreviousPreferredUILanguages` | Listed values replaced. Wallpaper and other values are untouched. |
@@ -414,6 +421,6 @@ the results go to `C:\Users\Public\Documents\LanguageProfile-Diff`.
 ## Development
 ```
 pwsh -File tests/Lint-PS51.ps1        # parse, PS 5.1 compatibility, ASCII-only, XAML names
-pwsh -File tests/Engine.Tests.ps1     # 127 engine tests; registry logic runs against a fake registry
+pwsh -File tests/Engine.Tests.ps1     # 133 engine tests; registry logic runs against a fake registry
                                       # loaded with real Windows 11 25H2 data (tests/fixtures)
 ```

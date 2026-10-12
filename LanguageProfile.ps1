@@ -162,6 +162,10 @@ $LPEngineScript = {
         [pscustomobject]@{ Id = 'CtfSortOrder';      Path = 'Software\Microsoft\CTF\SortOrder';                         Mode = 'Tree';   Names = $null }
         [pscustomobject]@{ Id = 'CtfAssemblies';     Path = 'Software\Microsoft\CTF\Assemblies';                        Mode = 'Tree';   Names = $null }
     )
+    # Per-user switch "change the regional format when the language list changes" (Set-/Get-
+    # WinCultureFromLanguageListOptOut). Off by default: Windows then sets the format to the display
+    # language's (Settings: "Use Windows display language"), e.g. en-US instead of de-CH. 1 = keep the format.
+    $script:CultureOptOutName = 'UserLocaleFromLanguageProfileOptOut'
     $script:SyncKeySpec = [pscustomobject]@{ Id = 'LanguageSync'; Path = 'Software\Microsoft\Windows\CurrentVersion\SettingSync\Groups\Language'; Mode = 'Value'; Names = @('Enabled') }
     $script:RemoteKbSpec = [pscustomobject]@{ Id = 'IgnoreRemoteKeyboardLayout'; Path = 'SYSTEM\CurrentControlSet\Control\Keyboard Layout'; Mode = 'Value'; Names = @('IgnoreRemoteKeyboardLayout') }
 
@@ -1158,6 +1162,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $list = Read-LPLanguageList -Base $Base -Path $up
         $backup = Read-LPLanguageList -Base $Base -Path (Join-LPRegPath $Root 'Control Panel\International\User Profile System Backup')
         $imo = Get-LPRegValue $Base $up 'InputMethodOverride'
+        $cultureOptOut = Get-LPRegValue $Base $up $script:CultureOptOutName
         $override = Get-LPRegValue $Base $up 'WindowsOverride'
         $desktop = Join-LPRegPath $Root 'Control Panel\Desktop'
         $preferred = $null
@@ -1206,6 +1211,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
             UILanguagePending   = $uiPending
             MachineUILanguage   = $machineUi
             Format              = $format
+            CultureOptOut       = $cultureOptOut
             GeoId               = $geoId
             Preload             = $preloadVals
             PreloadTips         = @($pp.Entries | ForEach-Object { if ($_.Valid) { $_.Tip } else { $_.Value } })
@@ -2157,6 +2163,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if (-not $ui -and $Kind -ne 'NewUsers') { $ui = $SystemUILanguage }
         if ($ui -ne $Selection.DisplayLanguage) { $issues.Add("display language is '$ui', expected '$($Selection.DisplayLanguage)'") }
         if ($State.Format -ne $Selection.RegionalFormat) { $issues.Add("regional format is '$($State.Format)', expected '$($Selection.RegionalFormat)'") }
+        if ($State.PSObject.Properties['CultureOptOut'] -and [string]$State.CultureOptOut -ne '1') { $issues.Add('regional format follows the display language (Windows changes it back to the display language''s format)') }
         if ([int]$State.GeoId -ne [int]$Selection.GeoId) { $issues.Add("country/region is $($State.GeoId), expected $($Selection.GeoId)") }
         if ((@($State.PreloadTips) -join ',') -ne (@($Selection.Tips) -join ',')) { $issues.Add('Preload is [' + (@($State.PreloadTips) -join ', ') + '], expected [' + (@($Selection.Tips) -join ', ') + ']') }
         if ($Selection.DisableSync -and $Kind -ne 'LockScreen' -and [string]$State.SyncEnabled -ne '0') { $issues.Add('language sync is not disabled') }
@@ -2220,6 +2227,9 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if ($Kind -ne 'LockScreen' -and [string]$State.SyncEnabled -ne '0') {
             $r.Add('Language settings sync is not disabled: sync can restore an old language list.')
         }
+        if ($State.PSObject.Properties['CultureOptOut'] -and [string]$State.CultureOptOut -ne '1' -and $State.Format -and $ui -and $State.Format -ne $ui) {
+            $r.Add("The regional format $($State.Format) follows the display language: when the language list or the display language changes, Windows switches it to $ui (Settings: 'Use Windows display language').")
+        }
         if ($langs.Count -gt 1) {
             $r.Add('More than one language in the list: each one adds its own entry (e.g. a second "DEU") to the switcher.')
         }
@@ -2250,7 +2260,12 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         if ($State.UILanguagePending) { $uiText += " (pending after sign-out: $($State.UILanguagePending))" }
         if ($State.PSObject.Properties['UILanguageOverride'] -and $State.UILanguageOverride -and $State.UILanguageCurrent -and $State.UILanguageCurrent -ne $State.UILanguageOverride) { $uiText += " (currently $($State.UILanguageCurrent), changes at next sign-in)" }
         $lines.Add((New-LPLine 'Text' ('Display language:   ' + $uiText)))
-        $lines.Add((New-LPLine 'Text' ('Regional format:    ' + $(if ($State.Format) { $State.Format } else { '(not set)' }))))
+        $fmtText = '(not set)'
+        if ($State.Format) { $fmtText = $State.Format }
+        if ($State.PSObject.Properties['CultureOptOut']) {
+            if ([string]$State.CultureOptOut -eq '1') { $fmtText += '  (kept when the display language changes)' } else { $fmtText += '  (follows the display language)' }
+        }
+        $lines.Add((New-LPLine 'Text' ('Regional format:    ' + $fmtText)))
         $lines.Add((New-LPLine 'Text' ('Country/region:     ' + $(if ($State.GeoId) { '{0} ({1})' -f (Get-LPGeoName $State.GeoId), $State.GeoId } else { '(not set)' }))))
         $lines.Add((New-LPLine 'Text' ('Language list:      ' + (Get-LPLanguageListText $State $Layouts))))
         if ($State.InputMethodOverride) { $lines.Add((New-LPLine 'Text' ('Default keyboard:   ' + (Get-LPTipDisplay $State.InputMethodOverride $Layouts)))) }
@@ -2330,6 +2345,7 @@ yo-NG|Yoruba (Nigeria)|LIP|en-US
         $curFmt = $null; $curGeo = 0
         if ($State) { $curFmt = $State.Format; $curGeo = [int]$State.GeoId }
         $lines.Add((New-LPLine $(if ($curFmt -eq $Selection.RegionalFormat) { 'Keep' } else { 'Set' }) ("Regional format: $($Selection.RegionalFormat)" + $(if ($curFmt -and $curFmt -ne $Selection.RegionalFormat) { "   (was $curFmt)" } else { '' }))))
+        if (-not $State -or [string]$State.CultureOptOut -ne '1') { $lines.Add((New-LPLine 'Set' 'Keep the regional format when the display language or the language list changes (instead of "Use Windows display language")')) }
         $lines.Add((New-LPLine $(if ($curGeo -eq $Selection.GeoId) { 'Keep' } else { 'Set' }) ('Country/region: {0} ({1})' -f (Get-LPGeoName $Selection.GeoId), $Selection.GeoId)))
         if ($State) {
             foreach ($l in @($State.Languages)) {
@@ -2540,6 +2556,20 @@ try {
     if ($PSVersionTable.PSEdition -ne 'Desktop') { throw 'The worker must run in Windows PowerShell 5.1.' }
     Import-Module International -ErrorAction Stop
     $tips = @($job.Tips)
+    # By default Windows sets the regional format to the display language's whenever the language list or
+    # the display language changes ("Use Windows display language" in Settings): en-US instead of de-CH,
+    # right away or a few minutes after the next sign-in. Switch that off before the list changes, and
+    # check again at the end. The registry value is what the tool verifies.
+    $keepFormat = {
+        Set-WinCultureFromLanguageListOptOut -OptOut $true
+        $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Control Panel\International\User Profile')
+        try {
+            Write-WorkerLog ('  UserLocaleFromLanguageProfileOptOut after the cmdlet: {0}' -f $k.GetValue('UserLocaleFromLanguageProfileOptOut', '(missing)'))
+            $k.SetValue('UserLocaleFromLanguageProfileOptOut', 1, [Microsoft.Win32.RegistryValueKind]::DWord)
+        }
+        finally { $k.Close() }
+    }
+    Invoke-WorkerStep 'Keep the regional format (Set-WinCultureFromLanguageListOptOut)' $keepFormat
 
     Invoke-WorkerStep 'Language list (Set-WinUserLanguageList)' {
         $list = New-WinUserLanguageList -Language $job.DisplayLanguage
@@ -2562,6 +2592,16 @@ try {
     }
     Invoke-WorkerStep 'Regional format (Set-Culture)' { Set-Culture -CultureInfo $job.RegionalFormat }
     Invoke-WorkerStep 'Country/region (Set-WinHomeLocation)' { Set-WinHomeLocation -GeoId ([int]$job.GeoId) }
+    Invoke-WorkerStep 'Keep the regional format (check)' {
+        & $keepFormat
+        $reg = ''
+        $ik = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Control Panel\International', $false)
+        if ($ik) { try { $reg = [string]$ik.GetValue('LocaleName', '') } finally { $ik.Close() } }
+        if ($reg -ne [string]$job.RegionalFormat) {
+            Write-WorkerLog "  regional format is '$reg' - setting $($job.RegionalFormat) again"
+            Set-Culture -CultureInfo $job.RegionalFormat
+        }
+    }
     Invoke-WorkerStep 'Keyboard Layout\Preload cleanup' {
         $cu = [Microsoft.Win32.Registry]::CurrentUser
         $vals = @()
@@ -3085,6 +3125,8 @@ finally {
     function Copy-LPReferenceToHive {
         param([Parameter(Mandatory)]$Base, [Parameter(Mandatory)][AllowEmptyString()][string]$Root, [Parameter(Mandatory)]$Reference, [bool]$DisableSync)
         foreach ($snap in $Reference) { Set-LPKeyFromSnapshot -Base $Base -Root $Root -Snapshot $snap }
+        # Keep the regional format fixed, also if the reference lacks the switch.
+        Set-LPRegDword -Base $Base -Path (Join-LPRegPath $Root 'Control Panel\International\User Profile') -Name $script:CultureOptOutName -Value 1
         if ($DisableSync) { Set-LPRegDword -Base $Base -Path (Join-LPRegPath $Root $script:SyncKeySpec.Path) -Name 'Enabled' -Value 0 }
     }
 

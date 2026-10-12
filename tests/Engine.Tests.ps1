@@ -405,7 +405,12 @@ $st = Get-LPHiveState -Base $h -Root '' -Layouts $layouts
 Assert ($st.UILanguage -eq 'en-US' -and $st.UILanguageOverride -eq 'en-US') 'real data: display language read from User Profile\WindowsOverride'
 Assert ((Eq $st.Preload @('00000409')) -and $st.Substitutes['00000409'] -eq '00000807' -and (Eq $st.PreloadTips @('0409:00000807'))) 'real data: Windows writes Preload 00000409 + Substitute 00000409 -> 00000807'
 $iss = @(Test-LPStateCompliance -State $st -Selection $std -Kind 'User')
-Assert ((@($iss | Where-Object { $_ -like 'language list backup*' }).Count -eq 1) -and (@($iss | Where-Object { $_ -like 'text input (CTF)*' }).Count -eq 1) -and $iss.Count -eq 2) "real data: after Windows' recipe only backup + CTF differ ($($iss -join ' / '))"
+Assert ((@($iss | Where-Object { $_ -like 'language list backup*' }).Count -eq 1) -and (@($iss | Where-Object { $_ -like 'text input (CTF)*' }).Count -eq 1) -and (@($iss | Where-Object { $_ -like 'regional format follows the display language*' }).Count -eq 1) -and $iss.Count -eq 3) "real data: after Windows' recipe only backup, CTF and the format switch differ ($($iss -join ' / '))"
+Assert (@(Get-LPRisks -State $st -Kind 'User' -SystemUILanguage 'en-US' -Layouts $layouts | Where-Object { $_ -like 'The regional format de-CH follows the display language*en-US*' }).Count -eq 1) 'real data: format de-CH that follows display language en-US -> risk'
+Assert (@(Get-LPStateLines -State $st -Layouts $layouts -SystemUILanguage 'en-US' | Where-Object { $_.Text -like 'Regional format:*de-CH*follows the display language*' }).Count -eq 1) 'status says the format follows the display language'
+Assert (@(Get-LPTargetChangeLines -State $st -Selection $std -Layouts $layouts -Kind 'User' -SystemUILanguage 'en-US' | Where-Object { $_.Level -eq 'Set' -and $_.Text -like 'Keep the regional format*' }).Count -eq 1) 'preview shows that the format will be kept'
+# The worker's "keep the regional format" step (Set-WinCultureFromLanguageListOptOut + registry value)
+$h.CreateSubKey('Control Panel\International\User Profile').SetValue('UserLocaleFromLanguageProfileOptOut', 1, 'DWord')
 $pp = Get-LPPreloadPlan -DesiredTips $std.Tips -Preload $st.Preload -Substitutes $st.Substitutes
 Assert ((Eq $pp.Preload @('00000409')) -and $pp.Substitutes['00000409'] -eq '00000807' -and @($pp.Removed).Count -eq 0) "Preload cleanup keeps Windows' own entry"
 $removed = @(Clear-LPCtfLeftovers -Base $h -Root '' -LangIds @($en))
@@ -413,6 +418,7 @@ Assert ((@($removed | Where-Object { $_ -like '*AssemblyItem\0x00000809' }).Coun
 Assert (Sync-LPLanguageBackup -Base $h -Root '') 'backup sync ran'
 $st = Get-LPHiveState -Base $h -Root '' -Layouts $layouts
 Assert (@(Test-LPStateCompliance -State $st -Selection $std -Kind 'User').Count -eq 0) 'real data: user compliant after recipe + backup sync + CTF cleanup'
+Assert (@(Get-LPStateLines -State $st -Layouts $layouts -SystemUILanguage 'en-US' | Where-Object { $_.Text -like 'Regional format:*de-CH*kept when the display language changes*' }).Count -eq 1) 'status says the format is kept'
 Assert (-not $h.OpenSubKey('Control Panel\International\User Profile System Backup').GetValue('WindowsOverride')) 'backup does not get the override values'
 Assert (@(Clear-LPCtfLeftovers -Base $h -Root '' -LangIds @($en)).Count -eq 0) 'CTF cleanup is idempotent'
 
@@ -422,6 +428,7 @@ $st = Get-LPHiveState -Base $lock -Root '' -Layouts $layouts
 Assert ((Eq $st.BackupLanguages @('en-CH', 'en-US')) -and (@($st.BackupTips) -contains '0409:00000409')) "real data: lock screen backup still has en-CH + US keyboard after Windows' recipe"
 $null = Clear-LPCtfLeftovers -Base $lock -Root '' -LangIds @($en)
 $null = Sync-LPLanguageBackup -Base $lock -Root ''
+$lock.CreateSubKey('Control Panel\International\User Profile').SetValue('UserLocaleFromLanguageProfileOptOut', 1, 'DWord')
 $st = Get-LPHiveState -Base $lock -Root '' -Layouts $layouts
 Assert (@(Test-LPStateCompliance -State $st -Selection $std -Kind 'LockScreen' -SystemUILanguage 'en-US').Count -eq 0) 'real data: lock screen reference compliant'
 $reference = @(Get-LPLanguageKeySet | ForEach-Object { Get-LPKeySnapshot -Base $lock -Root '' -Spec $_ })
@@ -448,6 +455,15 @@ $diff | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_.SideI
 Assert ($diff.Count -eq 0) "restore from manifest JSON is exact ($($diff.Count) differences)"
 $lines = Get-LPStateLines -State (Get-LPHiveState -Base (New-FakeHive $fx.userBefore) -Root '' -Layouts $layouts) -Layouts $layouts -SystemUILanguage 'en-US'
 Assert (@($lines | Where-Object { $_.Text -like 'List backup:*US*' }).Count -eq 1 -and @($lines | Where-Object { $_.Text -like 'Text input (CTF):*en-GB*' }).Count -eq 1) 'status shows the backup and CTF entries'
+
+# The copy pins the regional format even when the reference doesn't carry the switch
+$blank = [FakeKey]::new([FakeNode]::new())
+Copy-LPReferenceToHive -Base $blank -Root '' -Reference @() -DisableSync $false
+Assert ([int]$blank.OpenSubKey('Control Panel\International\User Profile').GetValue('UserLocaleFromLanguageProfileOptOut') -eq 1) 'copy keeps the regional format (opt-out = 1) even without it in the reference'
+$wtk = Get-LPWorkerScriptText
+$iOpt = $wtk.IndexOf('Set-WinCultureFromLanguageListOptOut -OptOut $true')
+$iList = $wtk.IndexOf('Set-WinUserLanguageList -LanguageList')
+Assert ($iOpt -gt 0 -and $iList -gt $iOpt -and $wtk.IndexOf("Keep the regional format (check)") -gt $wtk.IndexOf('Set-Culture -CultureInfo')) 'worker keeps the format before the list changes and checks it again after Set-Culture'
 
 # ------------------------------------------------------------------------------------------------
 Write-Host 'Launch from a network folder'

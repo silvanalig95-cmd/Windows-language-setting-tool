@@ -140,6 +140,7 @@ Windows re-adds layouts from several sources. The tool handles each one:
 | Windows' backup copy of the language list. Windows can restore the list from it. | Overwritten with the new list. |
 | Leftovers of removed languages in the text-input settings. | Removed. |
 | Settings sync restores an old list from another PC. | Language sync switched off. |
+| The regional format follows the display language. This is Windows' default: Settings shows "Use Windows display language", and the format switches from de-CH to en-US, often a few minutes after sign-in. | The format is fixed to the chosen one in every account, so it stays Swiss. |
 | Remote Desktop / Citrix sends the client's keyboard. | Blocked. |
 | New accounts start with Windows' defaults. | The template for new users is set too. |
 
@@ -407,6 +408,7 @@ All parameters and details: README.md, "Command line".
 | Windows "uninstall" of a pack is refused | Windows doesn't remove the language it was installed with. | Reported, not an error. The language is still removed from the language lists. |
 | An account is "skipped" | Its profile is locked or damaged. | The rest is applied. Try again when that user is signed out. |
 | A keyboard is back after some time | Something re-added it. | Open the Status tab: the RE-ADD RISK lines show the source. Run the tool again. Please report it (section 17). |
+| The regional format switches back to "Use Windows display language" (en-US) | The PC was set up with an older version of the tool, which didn't fix the format. Windows' default is to make the format follow the display language. | Run the tool again with this version. The Status tab shows "Regional format: de-CH (kept when the display language changes)". |
 
 ---
 
